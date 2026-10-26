@@ -24,20 +24,26 @@ This repository contains the complete, autonomous **AI Voice Calling Agent Platf
 
 When sharing this project with your client or team members, they **do not** need to install tools manually:
 
-### Option 1: 1-Click Setup File (Double-Click)
-```cmd
-setup_and_run.bat
-```
-- Checks for Python, Node.js, Ngrok, and Docker.
-- Automatically downloads missing tools (including official `ngrok.exe` into `bin/`).
-- Initializes environments, database, and seeds default voice agents.
-- Starts the system and opens the web dashboard at `http://localhost:5173`.
+### 1-Click Automated Setup:
+1. **Double-click `setup_and_run.bat`**:
+   - Automatically checks and installs Python, Node.js, and Ngrok.
+   - Automatically creates `backend/.env` with blank credential placeholders.
+   - Installs backend/frontend dependencies, creates `data/database/calling_agent.db`, and pre-seeds agents.
+   - Automatically launches all servers and opens the browser.
+2. **Add Ngrok Token**:
+   - Put your Ngrok Authtoken in `backend/.env` (`NGROK_AUTHTOKEN=your_token_here`).
+3. **Configure API Keys from the Website UI**:
+   - Open **`http://localhost:5173/settings`**.
+   - **Sarvam AI**: Enter your Sarvam API Key and click *Save Configuration*.
+   - **VoBiz Carrier**: Enter your Auth ID, Auth Token, and Caller ID Number, then click *Save VoBiz Trunk*.
+   - **Transcript / Gemini**: Enter your Gemini API Key and click *Save*.
+   - All credentials are saved immediately to the backend without restarting!
 
-### Option 2: Daily Launch File
+### Daily Startup (Every Day After First Setup):
 ```cmd
 start_all.bat
 ```
-Launches the Ngrok public tunnel, FastAPI backend, and React dashboard concurrently.
+Launches the Ngrok public tunnel, FastAPI backend, and React dashboard concurrently with one click.
 
 ---
 

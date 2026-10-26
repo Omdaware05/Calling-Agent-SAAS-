@@ -76,7 +76,21 @@ echo ""
 echo "[Step 3/7] Setting up environment files..."
 if [ ! -f "$BASE_DIR/backend/.env" ] && [ -f "$BASE_DIR/backend/.env.example" ]; then
     cp "$BASE_DIR/backend/.env.example" "$BASE_DIR/backend/.env"
-    echo " - Created backend/.env from template."
+    echo " - Automatically created backend/.env with blank credential placeholders."
+fi
+
+# Auto-configure Ngrok if token is present in backend/.env
+if [ -f "$BASE_DIR/backend/.env" ]; then
+    NGROK_TOKEN=$(grep -E '^NGROK_AUTHTOKEN=' "$BASE_DIR/backend/.env" | cut -d '=' -f2- | tr -d ' "')
+    if [ -n "$NGROK_TOKEN" ]; then
+        if command -v ngrok &>/dev/null; then
+            ngrok config add-authtoken "$NGROK_TOKEN" >/dev/null 2>&1
+            echo " - Configured Ngrok authtoken from backend/.env"
+        elif [ -f "$BASE_DIR/bin/ngrok" ]; then
+            "$BASE_DIR/bin/ngrok" config add-authtoken "$NGROK_TOKEN" >/dev/null 2>&1
+            echo " - Configured Ngrok authtoken in bin/ngrok from backend/.env"
+        fi
+    fi
 fi
 
 if [ ! -f "$BASE_DIR/frontend_1/.env" ] && [ -f "$BASE_DIR/frontend_1/.env.example" ]; then

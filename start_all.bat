@@ -27,6 +27,27 @@ if not exist "%BASE_DIR%\data\intelligence" mkdir "%BASE_DIR%\data\intelligence"
 if not exist "%BASE_DIR%\data\database" mkdir "%BASE_DIR%\data\database"
 if not exist "%BASE_DIR%\data\logs" mkdir "%BASE_DIR%\data\logs"
 
+:: Auto-apply Ngrok authtoken from backend\.env if present
+set "NGROK_TOKEN_VAL="
+if exist "%BASE_DIR%\backend\.env" (
+    for /f "usebackq tokens=1,* delims==" %%A in ("%BASE_DIR%\backend\.env") do (
+        if "%%A"=="NGROK_AUTHTOKEN" (
+            set "NGROK_TOKEN_VAL=%%B"
+        )
+    )
+)
+if defined NGROK_TOKEN_VAL (
+    set "NGROK_TOKEN_VAL=!NGROK_TOKEN_VAL: =!"
+    if not "!NGROK_TOKEN_VAL!"=="" (
+        where ngrok >nul 2>&1
+        if !errorlevel! equ 0 (
+            ngrok config add-authtoken !NGROK_TOKEN_VAL! >nul 2>&1
+        ) else if exist "%BASE_DIR%\bin\ngrok.exe" (
+            "%BASE_DIR%\bin\ngrok.exe" config add-authtoken !NGROK_TOKEN_VAL! >nul 2>&1
+        )
+    )
+)
+
 :: 1. Launch Ngrok Tunnel First (Port 8001)
 echo [1/3] Launching Telephony Public Tunnel (Ngrok Port 8001)...
 where ngrok >nul 2>&1

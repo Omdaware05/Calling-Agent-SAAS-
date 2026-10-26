@@ -110,12 +110,34 @@ echo.
 echo [Step 3/7] Setting up Environment Configurations...
 
 if not exist "%BASE_DIR%\backend\.env" (
-    if exist "%BASE_DIR%\backend\.env.example" (
-        copy "%BASE_DIR%\backend\.env.example" "%BASE_DIR%\backend\.env" >nul
-        echo  - Created backend\.env from template.
-    )
+    copy "%BASE_DIR%\backend\.env.example" "%BASE_DIR%\backend\.env" >nul
+    echo  - Automatically created backend\.env with blank credential placeholders.
+    echo    (Sarvam AI, VoBiz, and Gemini credentials can be added from the website Settings page)
 ) else (
     echo  - backend\.env already exists.
+)
+
+:: Auto-apply Ngrok authtoken from backend\.env if present
+set "NGROK_TOKEN_VAL="
+if exist "%BASE_DIR%\backend\.env" (
+    for /f "usebackq tokens=1,* delims==" %%A in ("%BASE_DIR%\backend\.env") do (
+        if "%%A"=="NGROK_AUTHTOKEN" (
+            set "NGROK_TOKEN_VAL=%%B"
+        )
+    )
+)
+if defined NGROK_TOKEN_VAL (
+    set "NGROK_TOKEN_VAL=!NGROK_TOKEN_VAL: =!"
+    if not "!NGROK_TOKEN_VAL!"=="" (
+        where ngrok >nul 2>&1
+        if !errorlevel! equ 0 (
+            ngrok config add-authtoken !NGROK_TOKEN_VAL! >nul 2>&1
+            echo  - Automatically configured Ngrok authtoken from backend\.env
+        ) else if exist "%BASE_DIR%\bin\ngrok.exe" (
+            "%BASE_DIR%\bin\ngrok.exe" config add-authtoken !NGROK_TOKEN_VAL! >nul 2>&1
+            echo  - Automatically configured Ngrok authtoken in bin\ngrok.exe from backend\.env
+        )
+    )
 )
 
 if not exist "%BASE_DIR%\frontend_1\.env" (
