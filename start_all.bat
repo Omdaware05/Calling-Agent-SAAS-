@@ -1,6 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
-title ARB SoftTech AI Calling Agent Launcher
+title "ARB SoftTech AI Calling Agent Launcher"
 color 0B
 
 echo =======================================================================
@@ -16,8 +16,9 @@ set "PATH=%BASE_DIR%\bin;%PATH%"
 :: Check if virtualenv exists; if not, invoke setup_and_run.bat
 if not exist "%BASE_DIR%\backend\.venv\Scripts\python.exe" (
     echo [NOTICE] First-time setup detected. Redirecting to setup_and_run.bat...
+    echo.
     call "%BASE_DIR%\setup_and_run.bat"
-    exit /b 0
+    goto end
 )
 
 :: Ensure central data folders exist
@@ -62,8 +63,8 @@ if %errorlevel% equ 0 (
     echo           Run 'setup_and_run.bat' to automatically download Ngrok.
 )
 
-:: Wait 3 seconds for Ngrok to assign a public URL and capture it
-timeout /t 3 /nobreak >nul
+:: Wait 3 seconds for Ngrok using reliable ping
+ping -n 4 127.0.0.1 >nul
 cd /d "%BASE_DIR%"
 call ".\backend\.venv\Scripts\activate.bat"
 python scripts\tunnel_helper.py 8001 >nul 2>&1
@@ -96,7 +97,7 @@ echo All services launched successfully!
 echo - Web Dashboard:       http://localhost:5173
 echo - Backend API Docs:    http://localhost:8001/docs
 if defined TUNNEL_URL (
-    echo - Active Public Tunnel: %TUNNEL_URL%
+    echo - Active Public Tunnel: !TUNNEL_URL!
 ) else (
     echo - Telecom Webhook:     Check Ngrok terminal window for assigned URL
 )
@@ -106,6 +107,11 @@ echo - Lead Intelligence:   data\intelligence\
 echo - Local Database:      data\database\calling_agent.db
 echo =======================================================================
 echo Opening Dashboard in your default browser...
-timeout /t 2 /nobreak >nul
+ping -n 3 127.0.0.1 >nul
 start http://localhost:5173
+
+:end
+echo.
+echo Platform is active! Keep this window open while using the application.
+pause
 exit /b 0

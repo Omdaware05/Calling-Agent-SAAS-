@@ -1,0 +1,7 @@
+# Ensure Windows batch and PowerShell scripts are always checked out with CRLF line endings
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Ensure Unix shell scripts use LF line endings
+*.sh text eol=lf

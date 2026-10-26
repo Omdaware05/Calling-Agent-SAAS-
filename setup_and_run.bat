@@ -1,17 +1,16 @@
 @echo off
 setlocal enabledelayedexpansion
-title ARB SoftTech AI Calling Agent - Universal 1-Click Setup & Launcher
+title "ARB SoftTech AI Calling Agent - 1-Click Setup and Launcher"
 color 0B
 
 echo =======================================================================
 echo          ARB SOFTTECH AI ENTERPRISE CALLING AGENT PLATFORM
-echo               UNIVERSAL 1-CLICK CLIENT AUTO-SETUP & RUNNER
+echo               UNIVERSAL 1-CLICK CLIENT AUTO-SETUP AND RUNNER
 echo =======================================================================
 echo.
 echo  This script will automatically inspect your PC for required software
-echo  (Python, Node.js, Ngrok, Docker), automatically download and install
-echo  any missing tools, configure environments and database, and launch
-echo  the full live telephony platform with zero manual hassle.
+echo  (Python, Node.js, Ngrok), automatically configure environments and
+echo  database, and launch the full live telephony platform with zero hassle.
 echo =======================================================================
 echo.
 
@@ -25,67 +24,120 @@ set "PATH=%BASE_DIR%\bin;%PATH%"
 echo [Step 1/7] Inspecting and Auto-Installing Prerequisites...
 
 :: 1.1 Check Ngrok
-where ngrok >nul 2>&1
-if %errorlevel% neq 0 (
-    if exist "%BASE_DIR%\bin\ngrok.exe" (
-        echo  - Ngrok: OK (Found in local bin\ngrok.exe)
-    ) else (
-        echo  - Ngrok is missing. Automatically downloading official Ngrok for Windows...
-        if not exist "%BASE_DIR%\bin" mkdir "%BASE_DIR%\bin"
-        powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Write-Host 'Downloading Ngrok binary...'; Invoke-WebRequest -Uri 'https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip' -OutFile '%BASE_DIR%\bin\ngrok.zip'; Expand-Archive -Path '%BASE_DIR%\bin\ngrok.zip' -DestinationPath '%BASE_DIR%\bin' -Force; Remove-Item '%BASE_DIR%\bin\ngrok.zip'"
-        if exist "%BASE_DIR%\bin\ngrok.exe" (
-            echo  - Ngrok: OK (Successfully downloaded to bin\ngrok.exe)
-        ) else (
-            echo  - Attempting winget install for Ngrok...
-            winget install -e --id Inconshreveable.Ngrok --accept-package-agreements --accept-source-agreements >nul 2>&1
-        )
-    )
-) else (
-    echo  - Ngrok: OK (Found in system PATH)
+if exist "%BASE_DIR%\bin\ngrok.exe" (
+    echo  - Ngrok: OK (Found in local bin\ngrok.exe)
+    goto ngrok_ready
 )
+where ngrok >nul 2>&1
+if %errorlevel% equ 0 (
+    echo  - Ngrok: OK (Found in system PATH)
+    goto ngrok_ready
+)
+
+echo  - Ngrok is missing. Automatically downloading official Ngrok for Windows...
+if not exist "%BASE_DIR%\bin" mkdir "%BASE_DIR%\bin"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Write-Host 'Downloading Ngrok portable binary...'; Invoke-WebRequest -Uri 'https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip' -OutFile '%BASE_DIR%\bin\ngrok.zip'; Expand-Archive -Path '%BASE_DIR%\bin\ngrok.zip' -DestinationPath '%BASE_DIR%\bin' -Force; Remove-Item '%BASE_DIR%\bin\ngrok.zip' -ErrorAction SilentlyContinue"
+if exist "%BASE_DIR%\bin\ngrok.exe" (
+    echo  - Ngrok: OK (Successfully downloaded to bin\ngrok.exe)
+    goto ngrok_ready
+)
+echo  - Attempting winget install for Ngrok...
+winget install -e --id Inconshreveable.Ngrok --accept-package-agreements --accept-source-agreements >nul 2>&1
+
+:ngrok_ready
 
 :: 1.2 Check Python
+set "PY_CMD="
 python --version >nul 2>&1
-if %errorlevel% neq 0 (
-    py --version >nul 2>&1
-    if %errorlevel% neq 0 (
-        echo  - Python is missing! Automatically downloading Python 3.12...
-        winget install -e --id Python.Python.3.12 --override "/quiet PrependPath=1" --accept-package-agreements --accept-source-agreements
-        echo  - Python installed. If not recognized immediately, restart this script.
-    ) else (
-        set "PY_CMD=py"
-        echo  - Python: OK (Detected via py launcher)
-    )
-) else (
+if %errorlevel% equ 0 (
     set "PY_CMD=python"
-    for /f "tokens=*" %%i in ('python --version 2^>^&1') do echo  - Python: OK (%%i)
+    for /f "tokens=*" %%i in ('python --version 2^>^&1') do echo  - Python: OK [%%i]
+    goto python_ready
 )
 
-:: 1.3 Check Node.js & npm
-node --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo  - Node.js is missing! Installing Node.js LTS via winget...
-    winget install -e --id OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
-) else (
-    for /f "tokens=*" %%i in ('node --version 2^>^&1') do echo  - Node.js: OK (%%i)
+py --version >nul 2>&1
+if %errorlevel% equ 0 (
+    set "PY_CMD=py"
+    echo  - Python: OK (Detected via py launcher)
+    goto python_ready
 )
 
-:: 1.4 Check Docker Desktop (Optional for Native mode, available for full stack)
-docker --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo  - Docker Desktop: Not installed (Native Sarvam AI mode runs 100%% without Docker!)
-) else (
-    for /f "tokens=*" %%i in ('docker --version 2^>^&1') do echo  - Docker CLI: OK (%%i)
-    docker info >nul 2>&1
-    if %errorlevel% neq 0 (
-        echo  - Docker Desktop is not currently running. Starting it in background...
-        if exist "C:\Program Files\Docker\Docker\Docker Desktop.exe" (
-            start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
-        )
-    ) else (
-        echo  - Docker Engine: OK (Running)
-    )
+if exist "%LocalAppData%\Programs\Python\Python312\python.exe" (
+    set "PY_CMD=%LocalAppData%\Programs\Python\Python312\python.exe"
+    set "PATH=%LocalAppData%\Programs\Python\Python312;%LocalAppData%\Programs\Python\Python312\Scripts;%PATH%"
+    echo  - Python: OK (Found at Python312)
+    goto python_ready
 )
+
+if exist "%LocalAppData%\Programs\Python\Python311\python.exe" (
+    set "PY_CMD=%LocalAppData%\Programs\Python\Python311\python.exe"
+    set "PATH=%LocalAppData%\Programs\Python\Python311;%LocalAppData%\Programs\Python\Python311\Scripts;%PATH%"
+    echo  - Python: OK (Found at Python311)
+    goto python_ready
+)
+
+if exist "C:\Program Files\Python312\python.exe" (
+    set "PY_CMD=C:\Program Files\Python312\python.exe"
+    set "PATH=C:\Program Files\Python312;C:\Program Files\Python312\Scripts;%PATH%"
+    echo  - Python: OK (Found at Program Files Python312)
+    goto python_ready
+)
+
+if exist "C:\Program Files\Python311\python.exe" (
+    set "PY_CMD=C:\Program Files\Python311\python.exe"
+    set "PATH=C:\Program Files\Python311;C:\Program Files\Python311\Scripts;%PATH%"
+    echo  - Python: OK (Found at Program Files Python311)
+    goto python_ready
+)
+
+echo  - Python is missing! Downloading and installing Python 3.11...
+winget install -e --id Python.Python.3.11 --override "/quiet PrependPath=1" --accept-package-agreements --accept-source-agreements
+if exist "%LocalAppData%\Programs\Python\Python311\python.exe" (
+    set "PY_CMD=%LocalAppData%\Programs\Python\Python311\python.exe"
+    set "PATH=%LocalAppData%\Programs\Python\Python311;%LocalAppData%\Programs\Python\Python311\Scripts;%PATH%"
+    echo  - Python: OK (Installed successfully)
+    goto python_ready
+)
+
+echo.
+echo [ERROR] Python 3.10+ is required.
+echo Please install Python from: https://www.python.org/downloads/
+echo Important: Check the box "Add Python to PATH" during installation.
+echo.
+pause
+exit /b 1
+
+:python_ready
+
+:: 1.3 Check Node.js
+where node >nul 2>&1
+if %errorlevel% equ 0 (
+    for /f "tokens=*" %%i in ('node --version 2^>^&1') do echo  - Node.js: OK [%%i]
+    goto node_ready
+)
+
+if exist "C:\Program Files\nodejs\node.exe" (
+    set "PATH=C:\Program Files\nodejs;%PATH%"
+    echo  - Node.js: OK (Found in Program Files)
+    goto node_ready
+)
+
+echo  - Node.js is missing! Installing Node.js LTS via winget...
+winget install -e --id OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
+if exist "C:\Program Files\nodejs\node.exe" (
+    set "PATH=C:\Program Files\nodejs;%PATH%"
+    echo  - Node.js: OK (Installed successfully)
+    goto node_ready
+)
+
+echo.
+echo [ERROR] Node.js is required for the frontend dashboard.
+echo Please install Node.js LTS from: https://nodejs.org
+echo.
+pause
+exit /b 1
+
+:node_ready
 echo.
 
 :: -------------------------------------------------------------------------
@@ -159,16 +211,23 @@ echo.
 echo [Step 4/7] Setting up Python Virtual Environment in backend\...
 cd /d "%BASE_DIR%\backend"
 if not exist ".\.venv\Scripts\python.exe" (
-    echo Creating fresh Python virtual environment...
-    %PY_CMD% -m venv .venv
+    echo  - Creating fresh Python virtual environment...
+    !PY_CMD! -m venv .venv
+    if !errorlevel! neq 0 (
+        echo [ERROR] Failed to create Python virtual environment.
+        pause
+        exit /b 1
+    )
 )
 call ".\.venv\Scripts\activate.bat"
-echo Installing backend dependencies (FastAPI, SQLAlchemy, httpx, etc.)...
+echo  - Installing backend dependencies (FastAPI, SQLAlchemy, httpx, etc.)...
 python -m pip install --upgrade pip >nul 2>&1
 pip install -r requirements.txt
 if %errorlevel% neq 0 (
     color 0C
+    echo.
     echo [ERROR] Failed to install backend dependencies. Please check network connectivity.
+    echo.
     pause
     exit /b 1
 )
@@ -181,7 +240,11 @@ echo.
 echo [Step 5/7] Installing Frontend UI Packages in frontend_1\...
 cd /d "%BASE_DIR%\frontend_1"
 if not exist "node_modules" (
-    call npm install
+    echo  - Installing npm packages for dashboard...
+    call npm.cmd install
+    if !errorlevel! neq 0 (
+        call npm install
+    )
 ) else (
     echo  - node_modules already installed.
 )
@@ -191,11 +254,11 @@ echo.
 :: -------------------------------------------------------------------------
 :: 6. DATABASE & SEED AGENTS INITIALIZATION
 :: -------------------------------------------------------------------------
-echo [Step 6/7] Initializing Database & Seeding Pre-Configured Voice Agents...
+echo [Step 6/7] Initializing Database and Seeding Pre-Configured Voice Agents...
 cd /d "%BASE_DIR%\backend"
 call ".\.venv\Scripts\activate.bat"
 python -c "import asyncio; from app.database import init_db; from app.database_migrations import run_async_migrations; from app.services.seed_service import seed_initial_data_if_needed; async def setup(): await init_db(); await run_async_migrations(); await seed_initial_data_if_needed(); asyncio.run(setup())" >nul 2>&1
-echo  - SQLite database initialized at data\database\calling_agent.db
+echo  - SQLite database ready at data\database\calling_agent.db
 echo  - Default Voice Agents seeded: Admission Counselor, Real Estate Advisor, Tech Support.
 echo.
 
@@ -213,8 +276,8 @@ if %errorlevel% equ 0 (
     start "ARB SoftTech Ngrok Tunnel (Port 8001)" cmd /k "title ARB SoftTech Ngrok Tunnel && "%BASE_DIR%\bin\ngrok.exe" http 8001"
 )
 
-:: Wait 3 seconds for Ngrok to acquire public HTTPS URL
-timeout /t 3 /nobreak >nul
+:: Wait 3 seconds for Ngrok using reliable ping
+ping -n 4 127.0.0.1 >nul
 cd /d "%BASE_DIR%"
 call ".\backend\.venv\Scripts\activate.bat"
 python scripts\tunnel_helper.py 8001 >nul 2>&1
@@ -249,6 +312,10 @@ echo  - Database:          data\database\calling_agent.db
 echo.
 echo =======================================================================
 echo Opening Dashboard in your default browser...
-timeout /t 2 /nobreak >nul
+ping -n 3 127.0.0.1 >nul
 start http://localhost:5173
+
+echo.
+echo Platform is active! Keep this window open or close it when finished.
+pause
 exit /b 0
