@@ -267,6 +267,10 @@ echo.
 :: -------------------------------------------------------------------------
 echo [Step 7/7] Launching Platform Services...
 
+:: Free ports 8001 and 5173 from previous lingering sessions
+for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr ":8001" ^| findstr "LISTENING"') do taskkill /f /pid %%a >nul 2>&1
+for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr ":5173" ^| findstr "LISTENING"') do taskkill /f /pid %%a >nul 2>&1
+
 :: 7.1 Start Ngrok Tunnel on Port 8001
 echo  - Starting Ngrok Public Tunnel (Port 8001)...
 where ngrok >nul 2>&1

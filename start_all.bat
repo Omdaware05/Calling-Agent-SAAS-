@@ -21,6 +21,10 @@ if not exist "%BASE_DIR%\backend\.venv\Scripts\python.exe" (
     goto end
 )
 
+:: Free ports 8001 and 5173 from previous lingering sessions
+for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr ":8001" ^| findstr "LISTENING"') do taskkill /f /pid %%a >nul 2>&1
+for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr ":5173" ^| findstr "LISTENING"') do taskkill /f /pid %%a >nul 2>&1
+
 :: Ensure central data folders exist
 if not exist "%BASE_DIR%\data\recordings" mkdir "%BASE_DIR%\data\recordings"
 if not exist "%BASE_DIR%\data\transcripts" mkdir "%BASE_DIR%\data\transcripts"
