@@ -1,0 +1,920 @@
+[
+  {
+    "voice_id": "aura-2-agathe-fr",
+    "name": "Agathe",
+    "description": "feminine, charismatic, cheerful, enthusiastic, friendly, natural",
+    "accent": "French",
+    "gender": "female",
+    "language": "fr",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/42d6da9286f2883874c7f7bd0e4462b5528bda56.wav"
+  },
+  {
+    "voice_id": "aura-2-agustina-es",
+    "name": "Agustina",
+    "description": "feminine, calm, clear, expressive, knowledgeable, professional",
+    "accent": "Peninsular",
+    "gender": "female",
+    "language": "es",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/c86256aa6178bea3825030d6b183dd97aff72250.wav"
+  },
+  {
+    "voice_id": "aura-2-alvaro-es",
+    "name": "\u00c1lvaro",
+    "description": "masculine, calm, professional, clear, knowledgeable, approachable",
+    "accent": "Peninsular",
+    "gender": "male",
+    "language": "es",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/fd081e898867bd462ced865a180d5283af3b0e1c.wav"
+  },
+  {
+    "voice_id": "aura-2-ama-ja",
+    "name": "Ama",
+    "description": "feminine, casual, comfortable, confident, knowledgeable, natural",
+    "accent": "Japanese",
+    "gender": "female",
+    "language": "ja",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/fb06a8b6b7b958b77cafe291ff48df3c2b2b4b43.wav"
+  },
+  {
+    "voice_id": "aura-2-amalthea-en",
+    "name": "amalthea",
+    "description": "feminine, engaging, natural, cheerful",
+    "accent": "Filipino",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/e5f50690fb8e1e2bcdd367290b7d268c495db202.wav"
+  },
+  {
+    "voice_id": "aura-2-andromeda-en",
+    "name": "andromeda",
+    "description": "feminine, casual, expressive, comfortable",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/d6a7514b3b1c3dc48ed5d1d4baaa2bb73c41c59e.wav"
+  },
+  {
+    "voice_id": "aura-2-antonia-es",
+    "name": "Antonia",
+    "description": "feminine, approachable, enthusiastic, friendly, natural, professional",
+    "accent": "Argentine",
+    "gender": "female",
+    "language": "es",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/e2f37450d392f5a8fc002d28a5ee1dbe728c392d.wav"
+  },
+  {
+    "voice_id": "aura-2-apollo-en",
+    "name": "apollo",
+    "description": "masculine, confident, comfortable, casual",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/2281ed81ae31472f9a5dbd0accdcb0dd828b273e.wav"
+  },
+  {
+    "voice_id": "aura-2-aquila-es",
+    "name": "aquila",
+    "description": "masculine, casual, comfortable, confident, expressive, enthusiastic",
+    "accent": "Latin American",
+    "gender": "male",
+    "language": "es",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/4abca777cfc3781e3c0e9dd5b928856a83b45809.wav"
+  },
+  {
+    "voice_id": "aura-2-arcas-en",
+    "name": "arcas",
+    "description": "masculine, natural, smooth, clear, comfortable",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/ddcdfd19ffa637aa4c8762f003f9908670bc3861.wav"
+  },
+  {
+    "voice_id": "aura-2-aries-en",
+    "name": "aries",
+    "description": "masculine, warm, energetic, caring",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/ba6f9c9e3359beb54cdcb153d9ddfb1f26184c6c.wav"
+  },
+  {
+    "voice_id": "aura-2-asteria-en",
+    "name": "asteria",
+    "description": "feminine, clear, confident, knowledgeable, energetic",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/4a2382e03800ba300b891be8f4b749b2f0935c4c.wav"
+  },
+  {
+    "voice_id": "aura-2-athena-en",
+    "name": "athena",
+    "description": "feminine, calm, smooth, professional",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/64fed899c97ab8e5ddcfef5bef9e8adaef04c1f7.wav"
+  },
+  {
+    "voice_id": "aura-2-atlas-en",
+    "name": "atlas",
+    "description": "masculine, enthusiastic, confident, approachable, friendly",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/4bc77f049399b72b11971cee63efe17a0942e4e3.wav"
+  },
+  {
+    "voice_id": "aura-2-aurelia-de",
+    "name": "Aurelia",
+    "description": "feminine, approachable, casual, comfortable, natural, sincere",
+    "accent": "German",
+    "gender": "female",
+    "language": "de",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/09043277d9547e906fcdd5820f161d84087048be.wav"
+  },
+  {
+    "voice_id": "aura-2-aurora-en",
+    "name": "aurora",
+    "description": "feminine, cheerful, expressive, energetic",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/813332a569d18bd1041fb26d1f503fe4b9042451.wav"
+  },
+  {
+    "voice_id": "aura-2-beatrix-nl",
+    "name": "Beatrix",
+    "description": "feminine, cheerful, enthusiastic, friendly, trustworthy, warm",
+    "accent": "Dutch",
+    "gender": "female",
+    "language": "nl",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/b275f5f995e91068d187bf9c907ab5fe86b0b253.wav"
+  },
+  {
+    "voice_id": "aura-2-callista-en",
+    "name": "callista",
+    "description": "feminine, clear, energetic, professional, smooth",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/6708b97fc33706293499bd65d7d43e6404674a3c.wav"
+  },
+  {
+    "voice_id": "aura-2-carina-es",
+    "name": "carina",
+    "description": "feminine, professional, raspy, energetic, breathy, confident",
+    "accent": "Peninsular",
+    "gender": "female",
+    "language": "es",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/5e5cf6f73619035eb6ece339bec3303777833384.wav"
+  },
+  {
+    "voice_id": "aura-2-celeste-es",
+    "name": "celeste",
+    "description": "feminine, clear, energetic, positive, friendly, enthusiastic",
+    "accent": "Colombian",
+    "gender": "female",
+    "language": "es",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/54703d0b8cbd0e4de1210cba80d760d047477d6b.wav"
+  },
+  {
+    "voice_id": "aura-2-cesare-it",
+    "name": "Cesare",
+    "description": "masculine, clear, empathetic, knowledgeable, natural, smooth",
+    "accent": "Italian",
+    "gender": "male",
+    "language": "it",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/a87f26f393377adf9cbf46311b8ed343c1412915.wav"
+  },
+  {
+    "voice_id": "aura-2-cinzia-it",
+    "name": "Cinzia",
+    "description": "feminine, approachable, friendly, smooth, trustworthy, warm",
+    "accent": "Italian",
+    "gender": "female",
+    "language": "it",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/d4f80f62ad7702bbd64bf4a267cbf3545c5f74d6.wav"
+  },
+  {
+    "voice_id": "aura-2-cora-en",
+    "name": "cora",
+    "description": "feminine, smooth, melodic, caring",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/9d480fe946b8c4995db1fe60058432f122772f8e.wav"
+  },
+  {
+    "voice_id": "aura-2-cordelia-en",
+    "name": "cordelia",
+    "description": "feminine, approachable, warm, polite",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/48debe704e6432fd88904f7e59651ec16311ec83.wav"
+  },
+  {
+    "voice_id": "aura-2-cornelia-nl",
+    "name": "Cornelia",
+    "description": "feminine, approachable, friendly, polite, positive, warm",
+    "accent": "Dutch",
+    "gender": "female",
+    "language": "nl",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/9e229626bbf18c2756733435ada304c3ed5814e7.wav"
+  },
+  {
+    "voice_id": "aura-2-daphne-nl",
+    "name": "Daphne",
+    "description": "feminine, calm, clear, confident, professional, smooth",
+    "accent": "Dutch",
+    "gender": "female",
+    "language": "nl",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/ae4c742f01b3ecb8197c63670248a2fdffc34e25.wav"
+  },
+  {
+    "voice_id": "aura-2-delia-en",
+    "name": "delia",
+    "description": "feminine, casual, friendly, cheerful, breathy",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/a8d8fe34f3896408ff1989f9cd37a6c4d63d1817.wav"
+  },
+  {
+    "voice_id": "aura-2-demetra-it",
+    "name": "Demetra",
+    "description": "feminine, calm, comfortable, patient",
+    "accent": "Italian",
+    "gender": "female",
+    "language": "it",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/16fbd2713f28713873a7c023fcc6073157cd60a1.wav"
+  },
+  {
+    "voice_id": "aura-2-diana-es",
+    "name": "diana",
+    "description": "feminine, professional, confident, expressive, polite, knowledgeable",
+    "accent": "Peninsular",
+    "gender": "female",
+    "language": "es",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/0203de493eddb33e661f6d3b2eb4502f26ca8d41.wav"
+  },
+  {
+    "voice_id": "aura-2-dionisio-it",
+    "name": "Dionisio",
+    "description": "masculine, confident, engaging, friendly, melodic, positive",
+    "accent": "Italian",
+    "gender": "male",
+    "language": "it",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/5a9af98a1384d8d9ac15e45f7f8663baa7f9f5f5.wav"
+  },
+  {
+    "voice_id": "aura-2-draco-en",
+    "name": "draco",
+    "description": "masculine, warm, approachable, trustworthy, baritone",
+    "accent": "British",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/02f3523c47f49521c37ce03b78d166aeaf703bde.wav"
+  },
+  {
+    "voice_id": "aura-2-ebisu-ja",
+    "name": "Ebisu",
+    "description": "masculine, calm, deep, natural, patient, sincere",
+    "accent": "Japanese",
+    "gender": "male",
+    "language": "ja",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/c6e27e0a540443c7b466fd0bf911e46a522668da.wav"
+  },
+  {
+    "voice_id": "aura-2-elara-de",
+    "name": "Elara",
+    "description": "feminine, calm, clear, natural, patient, trustworthy",
+    "accent": "German",
+    "gender": "female",
+    "language": "de",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/cd9034f61fd6abea6ddb8f78906f26ed7bcded29.wav"
+  },
+  {
+    "voice_id": "aura-2-electra-en",
+    "name": "electra",
+    "description": "feminine, professional, engaging, knowledgeable",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/4ed83539b158003878f12c7b748258d89d3a87ef.wav"
+  },
+  {
+    "voice_id": "aura-2-elio-it",
+    "name": "Elio",
+    "description": "masculine, breathy, calm, professional, smooth, trustworthy",
+    "accent": "Italian",
+    "gender": "male",
+    "language": "it",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/8b1d4932ce4668d0fd026c6208049304c4712706.wav"
+  },
+  {
+    "voice_id": "aura-2-estrella-es",
+    "name": "estrella",
+    "description": "feminine, approachable, calm, comfortable, expressive, natural",
+    "accent": "Mexican",
+    "gender": "female",
+    "language": "es",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/634f431ac18a6ff2604b9ba25e3e951059787e65.wav"
+  },
+  {
+    "voice_id": "aura-2-fabian-de",
+    "name": "Fabian",
+    "description": "masculine, confident, knowledgeable, natural, polite, professional",
+    "accent": "German",
+    "gender": "male",
+    "language": "de",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/4f916075d5e0a6e53ec0b882c6ee898c990fd55c.wav"
+  },
+  {
+    "voice_id": "aura-2-flavio-it",
+    "name": "Flavio",
+    "description": "masculine, confident, deep, empathetic, professional, trustworthy",
+    "accent": "Italian",
+    "gender": "male",
+    "language": "it",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/8f82fc2b558e5535fa777fa07c24ccbc12a7262d.wav"
+  },
+  {
+    "voice_id": "aura-2-fujin-ja",
+    "name": "Fujin",
+    "description": "masculine, calm, confident, knowledgeable, professional, smooth",
+    "accent": "Japanese",
+    "gender": "male",
+    "language": "ja",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/6b5070e24e16c1d0f052b6747932bdfbaec6fff0.wav"
+  },
+  {
+    "voice_id": "aura-2-gloria-es",
+    "name": "Gloria",
+    "description": "feminine, casual, clear, expressive, natural, smooth",
+    "accent": "Colombian",
+    "gender": "female",
+    "language": "es",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/c08c8df6cca7622212e00a1d582548d15338f1c5.wav"
+  },
+  {
+    "voice_id": "aura-2-harmonia-en",
+    "name": "harmonia",
+    "description": "feminine, empathetic, clear, calm, confident",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/4bd9bb399e470022e56bed26d3d175574b9a6167.wav"
+  },
+  {
+    "voice_id": "aura-2-hector-fr",
+    "name": "Hector",
+    "description": "masculine, confident, empathetic, expressive, friendly, patient",
+    "accent": "French",
+    "gender": "male",
+    "language": "fr",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/35f6e07a2b75ddda5a25ea9c67be31596de96c5e.wav"
+  },
+  {
+    "voice_id": "aura-2-helena-en",
+    "name": "helena",
+    "description": "feminine, caring, natural, positive, friendly, raspy",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/de806ec0ef7c09d838d6eabe8b47886a39ba2f53.wav"
+  },
+  {
+    "voice_id": "aura-2-hera-en",
+    "name": "hera",
+    "description": "feminine, smooth, warm, professional",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/d31b232c29658b73d3d2e776b2909b957cb460e4.wav"
+  },
+  {
+    "voice_id": "aura-2-hermes-en",
+    "name": "hermes",
+    "description": "masculine, expressive, engaging, professional",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/45b252379088fa62c9de50fe57bd9b2aec5eb5ce.wav"
+  },
+  {
+    "voice_id": "aura-2-hestia-nl",
+    "name": "Hestia",
+    "description": "feminine, approachable, caring, expressive, friendly, knowledgeable",
+    "accent": "Dutch",
+    "gender": "female",
+    "language": "nl",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/803b683e542e75e501d9311579eea9a284e95e9b.wav"
+  },
+  {
+    "voice_id": "aura-2-hyperion-en",
+    "name": "hyperion",
+    "description": "masculine, caring, warm, empathetic",
+    "accent": "Australian",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/997c4cabfe0f2bd6fe09fa3b8aaafe05bb815c38.wav"
+  },
+  {
+    "voice_id": "aura-2-iris-en",
+    "name": "iris",
+    "description": "feminine, cheerful, positive, approachable",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/53f993f1f3ec020f5e1e0fd2c3faaa199beed152.wav"
+  },
+  {
+    "voice_id": "aura-2-izanami-ja",
+    "name": "Izanami",
+    "description": "feminine, approachable, clear, knowledgeable, polite, professional",
+    "accent": "Japanese",
+    "gender": "female",
+    "language": "ja",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/c07845e2af88fb786d32470613271111cc718b13.wav"
+  },
+  {
+    "voice_id": "aura-2-janus-en",
+    "name": "janus",
+    "description": "feminine, southern, smooth, trustworthy",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/e3dd69021b81be052384f5ce96c76fa1cab0c0b6.wav"
+  },
+  {
+    "voice_id": "aura-2-javier-es",
+    "name": "javier",
+    "description": "masculine, approachable, calm, comfortable, friendly, professional",
+    "accent": "Latin American",
+    "gender": "male",
+    "language": "es",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/ee4cacc009ac834034146cb8b719ace32db2d2c1.wav"
+  },
+  {
+    "voice_id": "aura-2-julius-de",
+    "name": "Julius",
+    "description": "masculine, casual, cheerful, engaging, expressive, friendly",
+    "accent": "German",
+    "gender": "male",
+    "language": "de",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/35ce546be29ac57017ca439bc13fbedc42f6102b.wav"
+  },
+  {
+    "voice_id": "aura-2-juno-en",
+    "name": "juno",
+    "description": "feminine, natural, engaging, melodic, breathy",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/13edcfcc1339af95c4bf054f7e2dd3be17fde576.wav"
+  },
+  {
+    "voice_id": "aura-2-jupiter-en",
+    "name": "jupiter",
+    "description": "masculine, expressive, knowledgeable, baritone",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/17e56b3681e258325818b13b1c0b67cd4dc26d58.wav"
+  },
+  {
+    "voice_id": "aura-2-kara-de",
+    "name": "Kara",
+    "description": "feminine, caring, empathetic, expressive, professional, warm",
+    "accent": "German",
+    "gender": "female",
+    "language": "de",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/dff08e7163309ce6365b521e97e6adc8c427adaf.wav"
+  },
+  {
+    "voice_id": "aura-2-lara-de",
+    "name": "Lara",
+    "description": "feminine, caring, cheerful, empathetic, expressive, warm",
+    "accent": "German",
+    "gender": "female",
+    "language": "de",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/cd3189e240f33951543f3bd108e51df21e4596f0.wav"
+  },
+  {
+    "voice_id": "aura-2-lars-nl",
+    "name": "Lars",
+    "description": "masculine, breathy, casual, comfortable, sincere, trustworthy",
+    "accent": "Dutch",
+    "gender": "male",
+    "language": "nl",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/7f840d733c545aeaf5e6862f1bb5631708e3f4be.wav"
+  },
+  {
+    "voice_id": "aura-2-leda-nl",
+    "name": "Leda",
+    "description": "feminine, caring, comfortable, empathetic, friendly, sincere",
+    "accent": "Dutch",
+    "gender": "female",
+    "language": "nl",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/c9113e5be102b110c5ca23b3d0ee598a209bdab3.wav"
+  },
+  {
+    "voice_id": "aura-2-livia-it",
+    "name": "Livia",
+    "description": "feminine, approachable, cheerful, clear, engaging, expressive",
+    "accent": "Italian",
+    "gender": "female",
+    "language": "it",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/0fa008b01cd6d9394d7c46e943b2e0670ce9348c.wav"
+  },
+  {
+    "voice_id": "aura-2-luciano-es",
+    "name": "Luciano",
+    "description": "masculine, charismatic, cheerful, energetic, expressive, friendly",
+    "accent": "Mexican",
+    "gender": "male",
+    "language": "es",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/cebad7b542dc4b74c37a0106e7bfe868edba6410.wav"
+  },
+  {
+    "voice_id": "aura-2-luna-en",
+    "name": "luna",
+    "description": "feminine, friendly, natural, engaging",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/9b284985e709ca2e5839e35f119da537ef0b1b31.wav"
+  },
+  {
+    "voice_id": "aura-2-maia-it",
+    "name": "Maia",
+    "description": "feminine, caring, energetic, expressive, professional, warm",
+    "accent": "Italian",
+    "gender": "female",
+    "language": "it",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/425190f3a7e4f02ef24ac18c53568cef5fb65c25.wav"
+  },
+  {
+    "voice_id": "aura-2-mars-en",
+    "name": "mars",
+    "description": "masculine, smooth, patient, trustworthy, baritone",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/308470b81526c7271123f13e7a13ae055ce3d4ae.wav"
+  },
+  {
+    "voice_id": "aura-2-melia-it",
+    "name": "Melia",
+    "description": "feminine, clear, comfortable, engaging, friendly, natural",
+    "accent": "Italian",
+    "gender": "female",
+    "language": "it",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/8a7a82eb459a768b5f4f5a76570cbc175272c52a.wav"
+  },
+  {
+    "voice_id": "aura-2-minerva-en",
+    "name": "minerva",
+    "description": "feminine, positive, friendly, natural",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/ae741031efa09c570b7f45feef55615bcf5ddf75.wav"
+  },
+  {
+    "voice_id": "aura-2-neptune-en",
+    "name": "neptune",
+    "description": "masculine, professional, patient, polite",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/66dfdf6b13be2c5d45878f70937c8dcdab698e96.wav"
+  },
+  {
+    "voice_id": "aura-2-nestor-es",
+    "name": "N\u00e9stor",
+    "description": "masculine, calm, professional, approachable, clear, confident",
+    "accent": "Peninsular",
+    "gender": "male",
+    "language": "es",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/a1fd5880d2827686f037212d45f1884b3a5941ed.wav"
+  },
+  {
+    "voice_id": "aura-2-odysseus-en",
+    "name": "odysseus",
+    "description": "calm, smooth, comfortable, professional, masculine",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/5b1d6642271993dcd7948b899ac2f157072ab8c2.wav"
+  },
+  {
+    "voice_id": "aura-2-olivia-es",
+    "name": "Olivia",
+    "description": "feminine, breathy, calm, casual, expressive, warm",
+    "accent": "Mexican",
+    "gender": "female",
+    "language": "es",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/18b02dbef439f00b084f17f449dd495757265cd7.wav"
+  },
+  {
+    "voice_id": "aura-2-ophelia-en",
+    "name": "ophelia",
+    "description": "feminine, expressive, enthusiastic, cheerful",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/5ab5a5436fd3c668b8f88f964feb26f3f35f1731.wav"
+  },
+  {
+    "voice_id": "aura-2-orion-en",
+    "name": "orion",
+    "description": "masculine, approachable, comfortable, calm, polite",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/9c98fdfb05214de2d5274908a7cd20aa080d508d.wav"
+  },
+  {
+    "voice_id": "aura-2-orpheus-en",
+    "name": "orpheus",
+    "description": "masculine, professional, clear, confident, trustworthy",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/92f91c24288e8a229229cf6876aaeb5dcd655f3c.wav"
+  },
+  {
+    "voice_id": "aura-2-pandora-en",
+    "name": "pandora",
+    "description": "feminine, smooth, calm, melodic, breathy",
+    "accent": "British",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/0d2396968e2e73a7ff85e843fa4061f03c43e9a4.wav"
+  },
+  {
+    "voice_id": "aura-2-phoebe-en",
+    "name": "phoebe",
+    "description": "feminine, energetic, warm, casual",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/61c34319bf73072046d927f5863eb117c5c293de.wav"
+  },
+  {
+    "voice_id": "aura-2-pluto-en",
+    "name": "pluto",
+    "description": "masculine, smooth, calm, empathetic, baritone",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/52f59787406510cc21fc2af13e65917506b06616.wav"
+  },
+  {
+    "voice_id": "aura-2-rhea-nl",
+    "name": "Rhea",
+    "description": "feminine, caring, knowledgeable, positive, smooth, warm",
+    "accent": "Dutch",
+    "gender": "female",
+    "language": "nl",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/6d25e09867ffa467e0118e0b9385c6f380f4be01.wav"
+  },
+  {
+    "voice_id": "aura-2-roman-nl",
+    "name": "Roman",
+    "description": "masculine, calm, casual, deep, natural, patient",
+    "accent": "Dutch",
+    "gender": "male",
+    "language": "nl",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/0ea0699111f05942b47371a842b4b6fc87684291.wav"
+  },
+  {
+    "voice_id": "aura-2-sander-nl",
+    "name": "Sander",
+    "description": "masculine, calm, clear, deep, professional, smooth",
+    "accent": "Dutch",
+    "gender": "male",
+    "language": "nl",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/027463bc4deb929e777f3276b7b19d186621fc7d.wav"
+  },
+  {
+    "voice_id": "aura-2-saturn-en",
+    "name": "saturn",
+    "description": "masculine, knowledgeable, confident, baritone",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/22afa7dbf220c2c782fdedb250eebf1f7ceb013c.wav"
+  },
+  {
+    "voice_id": "aura-2-selena-es",
+    "name": "selena",
+    "description": "feminine, approachable, calm, casual, friendly, positive",
+    "accent": "Latin American",
+    "gender": "female",
+    "language": "es",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/b1f9edf4e7aef877c180945d379712bdd260ea19.wav"
+  },
+  {
+    "voice_id": "aura-2-selene-en",
+    "name": "selene",
+    "description": "feminine, expressive, engaging, energetic",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/cebe72725a11e7c576de3f851b53d71616371f2a.wav"
+  },
+  {
+    "voice_id": "aura-2-silvia-es",
+    "name": "Silvia",
+    "description": "feminine, charismatic, clear, expressive, natural, warm",
+    "accent": "Peninsular",
+    "gender": "female",
+    "language": "es",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/44dc99e4f494a4d1b62ae606f8833081881974e6.wav"
+  },
+  {
+    "voice_id": "aura-2-sirio-es",
+    "name": "sirio",
+    "description": "masculine, breathy, confident, energetic, professional, raspy",
+    "accent": "Mexican",
+    "gender": "male",
+    "language": "es",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/4987b6351f7f8bb6711f6e7b9f453b730ee09254.wav"
+  },
+  {
+    "voice_id": "aura-2-thalia-en",
+    "name": "thalia",
+    "description": "feminine, clear, confident, energetic, enthusiastic",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/e8725b8d3ec0a0bd924c13c84aaeb3acaa0adaac.wav"
+  },
+  {
+    "voice_id": "aura-2-theia-en",
+    "name": "theia",
+    "description": "feminine, expressive, polite, sincere",
+    "accent": "Australian",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/662085e396fa53bb888e492ec5453dde9bb22674.wav"
+  },
+  {
+    "voice_id": "aura-2-uzume-ja",
+    "name": "Uzume",
+    "description": "feminine, approachable, clear, polite, professional, trustworthy",
+    "accent": "Japanese",
+    "gender": "female",
+    "language": "ja",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/103f891fa0d06bbd4a0a7d49d70a36b39ce4c9ec.wav"
+  },
+  {
+    "voice_id": "aura-2-valerio-es",
+    "name": "Valerio",
+    "description": "masculine, deep, knowledgeable, natural, polite, professional",
+    "accent": "Mexican",
+    "gender": "male",
+    "language": "es",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/3a026a40abe8b1b103052c9dd0b96e60d4e6c006.wav"
+  },
+  {
+    "voice_id": "aura-2-vesta-en",
+    "name": "vesta",
+    "description": "feminine, natural, expressive, patient, empathetic",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/8595c997fb3aa8bdd4b0de085f7f5f68422dc1be.wav"
+  },
+  {
+    "voice_id": "aura-2-viktoria-de",
+    "name": "Viktoria",
+    "description": "feminine, charismatic, cheerful, enthusiastic, friendly, warm",
+    "accent": "German",
+    "gender": "female",
+    "language": "de",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/880254f7db6af9fa9b03b72f2c6f74fa45885199.wav"
+  },
+  {
+    "voice_id": "aura-2-zeus-en",
+    "name": "zeus",
+    "description": "masculine, deep, trustworthy, smooth",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/b744984f936b70c1af8998911e1c166a843b4711.wav"
+  },
+  {
+    "voice_id": "aura-angus-en",
+    "name": "angus",
+    "description": "masculine, casual, friendly, patient",
+    "accent": "Irish",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/f45d7dd5526a1661929f39943dbf3771e2203855.wav"
+  },
+  {
+    "voice_id": "aura-arcas-en",
+    "name": "arcas",
+    "description": "masculine, natural, smooth, clear",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/af08e65fa6b208c3dbdeb23fc0e9c3424ae835f6.mp3"
+  },
+  {
+    "voice_id": "aura-asteria-en",
+    "name": "asteria",
+    "description": "feminine, clear, confident, knowledgeable",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/fcd00b53e0482cdd7cde043c94c84adccab223a3.wav"
+  },
+  {
+    "voice_id": "aura-athena-en",
+    "name": "athena",
+    "description": "feminine, smooth, calm, professional",
+    "accent": "British",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/94246ae78f333423442edf8c4c93566e836a12f1.wav"
+  },
+  {
+    "voice_id": "aura-helios-en",
+    "name": "helios",
+    "description": "masculine, postive, comfortable, polite",
+    "accent": "British",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/9b0c74e03153b7b9efce7b1ae9694d4842c1e647.wav"
+  },
+  {
+    "voice_id": "aura-hera-en",
+    "name": "hera",
+    "description": "feminine, deep, smooth, warm",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/e9d3fe1b11e8ffbbd56ae0a56d324652f24f4327.wav"
+  },
+  {
+    "voice_id": "aura-luna-en",
+    "name": "luna",
+    "description": "feminine, friendly, natural, engaging",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/17d9a3faa3c6097605140779a04be53d1522686c.wav"
+  },
+  {
+    "voice_id": "aura-orion-en",
+    "name": "orion",
+    "description": "masculine, approachable, comfortable, calm",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/40d8449a09bafebf02901c05aa198b42a3f7b498.mp3"
+  },
+  {
+    "voice_id": "aura-orpheus-en",
+    "name": "orpheus",
+    "description": "masculine, clear, trustworthy, professional",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/ad2c792bcbdb2cc600345547c9afecf9b0cfaad8.wav"
+  },
+  {
+    "voice_id": "aura-perseus-en",
+    "name": "perseus",
+    "description": "masculine, expressive, melodic, charismatic",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/a0575d49b32988c95068f44ef76eb873a754e622.wav"
+  },
+  {
+    "voice_id": "aura-stella-en",
+    "name": "stella",
+    "description": "feminine, raspy, engaging, cheerful",
+    "accent": "American",
+    "gender": "female",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/66f5f09b4447c2e1502004976fbe2582b7319d70.wav"
+  },
+  {
+    "voice_id": "aura-zeus-en",
+    "name": "zeus",
+    "description": "masculine, deep, trustworthy, smooth",
+    "accent": "American",
+    "gender": "male",
+    "language": "en",
+    "preview_url": "https://cdn.sanity.io/files/0dsbfl6j/production/28f2b55e04a419bcc2d0237ee655913d8509be62.wav"
+  }
+]

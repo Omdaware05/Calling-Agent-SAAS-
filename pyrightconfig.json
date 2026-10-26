@@ -1,0 +1,14 @@
+{
+  "venvPath": "backend",
+  "venv": ".venv",
+  "include": [
+    "backend/app"
+  ],
+  "extraPaths": [
+    "backend"
+  ],
+  "reportMissingImports": "error",
+  "reportGeneralTypeIssues": "none",
+  "reportAttributeAccessIssue": "none",
+  "reportArgumentType": "none"
+}

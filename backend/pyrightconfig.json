@@ -1,0 +1,14 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "include": [
+    "app"
+  ],
+  "extraPaths": [
+    "."
+  ],
+  "reportMissingImports": "error",
+  "reportGeneralTypeIssues": "none",
+  "reportAttributeAccessIssue": "none",
+  "reportArgumentType": "none"
+}

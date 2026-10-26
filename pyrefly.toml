@@ -1,0 +1,15 @@
+project-includes = ["backend/app"]
+search-path = ["backend"]
+python-interpreter-path = "D:/Calling Agent/backend/.venv/Scripts/python.exe"
+site-package-path = ["D:/Calling Agent/backend/.venv/Lib/site-packages"]
+
+[errors]
+missing-import = "error"
+bad-assignment = "ignore"
+bad-argument-type = "ignore"
+invalid-argument = "ignore"
+missing-attribute = "ignore"
+missing-module-attribute = "ignore"
+no-access = "ignore"
+read-only = "ignore"
+column-type-mismatch = "ignore"

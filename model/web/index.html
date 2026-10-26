@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Call Transcript Intent Classifier</title>
+  <meta name="description" content="Two-Class AI Call Transcript Intent Classifier determining customer intent: INTERESTED vs NOT_INTERESTED across multilingual conversations.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="hero-header">
+      <div class="header-content">
+        <div class="brand-badge">
+          <span class="pulse-dot"></span>
+          <span>ENTERPRISE INTENT ENGINE</span>
+        </div>
+        <h1 class="main-title">Two-Class Call Intent Classifier</h1>
+        <p class="subtitle">
+          Commercial intent classifier for sales and support transcripts. Multilingual reasoning (English, Hindi, Marathi, Hinglish) with high-recall lead preservation.
+        </p>
+      </div>
+      <div class="stats-pill-container" id="statsContainer">
+        <div class="stat-pill">
+          <span class="stat-label">Model Status</span>
+          <span class="stat-value text-emerald">Active • High Recall</span>
+        </div>
+        <div class="stat-pill">
+          <span class="stat-label">Classes</span>
+          <span class="stat-value">INTERESTED / NOT_INTERESTED</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Workspace Grid -->
+    <main class="workspace-grid">
+      <!-- Left Panel: Input & Presets -->
+      <section class="panel editor-panel">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <h2>Call Transcript</h2>
+          </div>
+          <div class="preset-selector-wrapper">
+            <label for="presetSelect" class="sr-only">Load Example</label>
+            <select id="presetSelect" class="styled-select" title="Load Reference Example">
+              <option value="">-- Load Reference Examples --</option>
+              <optgroup label="Specification Reference Examples (Section 19)">
+                <option value="ex1">Example 1: Inquiries on working & price (INTERESTED)</option>
+                <option value="ex2">Example 2: Clear polite rejection (NOT_INTERESTED)</option>
+                <option value="ex3">Example 3: Skeptical on price + plan inquiry (INTERESTED)</option>
+                <option value="ex4">Example 4: WhatsApp details request (INTERESTED)</option>
+                <option value="ex5">Example 5: Explicit DNC request (NOT_INTERESTED)</option>
+                <option value="ex6">Example 6: Uncertain + explain request (INTERESTED)</option>
+                <option value="ex7">Example 7: Initial No -> later positive inquiry (INTERESTED)</option>
+                <option value="ex8">Example 8: Hangup with only greetings (NOT_INTERESTED)</option>
+              </optgroup>
+              <optgroup label="Multilingual & Edge Cases">
+                <option value="hinglish_angry">Hinglish: Angry sentiment + price inquiry (INTERESTED)</option>
+                <option value="marathi_interest">Marathi: Inquiring about service & rate (INTERESTED)</option>
+                <option value="marathi_dnc">Marathi: DNC request (NOT_INTERESTED)</option>
+                <option value="dnc_override">DNC overrides earlier interest (NOT_INTERESTED)</option>
+                <option value="wrong_person">Wrong person / Wrong number (NOT_INTERESTED)</option>
+                <option value="noisy_stt">Noisy ASR Speech-to-Text artifacts (INTERESTED)</option>
+              </optgroup>
+            </select>
+          </div>
+        </div>
+
+        <div class="editor-container">
+          <textarea id="transcriptInput" class="transcript-textarea" placeholder="Paste dialogue here...&#10;&#10;Agent: We offer automated sales outreach.&#10;Customer: Achha, iska price kitna hai?"></textarea>
+        </div>
+
+        <div class="panel-footer">
+          <div class="toggle-group">
+            <button id="noiseBtn" class="btn-secondary" title="Add Speech-to-Text Noise">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path d="M2 12h20M2 12l4-4m-4 4l4 4M22 12l-4-4m4 4l-4 4"></path>
+              </svg>
+              <span>Simulate ASR Noise</span>
+            </button>
+            <button id="clearBtn" class="btn-ghost">Clear</button>
+          </div>
+          <button id="classifyBtn" class="btn-primary">
+            <span>Classify Intent</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- Right Panel: Results & Diagnostics -->
+      <section class="panel results-panel">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+            <h2>Classification Diagnostic</h2>
+          </div>
+          <div class="tabs">
+            <button class="tab-btn active" data-tab="decisionTab">Decision</button>
+            <button class="tab-btn" data-tab="turnsTab">Turn Analysis</button>
+            <button class="tab-btn" data-tab="jsonTab">Raw JSON</button>
+          </div>
+        </div>
+
+        <!-- Decision Tab Content -->
+        <div id="decisionTab" class="tab-content active">
+          <div class="result-card" id="resultCard">
+            <div class="result-placeholder" id="resultPlaceholder">
+              <div class="empty-state-icon">⚡</div>
+              <h3>Ready to Classify</h3>
+              <p>Select a reference example or paste a transcript to inspect the decision.</p>
+            </div>
+
+            <div class="result-content hidden" id="resultContent">
+              <div class="classification-hero">
+                <span class="decision-eyebrow">FINAL CLASSIFICATION</span>
+                <div class="badge-large" id="decisionBadge">INTERESTED</div>
+                <div class="confidence-bar-container">
+                  <div class="confidence-header">
+                    <span>Confidence Score</span>
+                    <span id="confidenceValue" class="confidence-val">95%</span>
+                  </div>
+                  <div class="progress-track">
+                    <div class="progress-fill" id="confidenceFill" style="width: 95%;"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Metrics Matrix -->
+              <div class="metrics-grid">
+                <div class="metric-card">
+                  <span class="m-label">Priority Tier</span>
+                  <span class="m-value" id="priorityTier">Priority 3</span>
+                </div>
+                <div class="metric-card">
+                  <span class="m-label">Languages Detected</span>
+                  <span class="m-value" id="languagesDetected">English, Hindi</span>
+                </div>
+                <div class="metric-card">
+                  <span class="m-label">Customer Turns</span>
+                  <span class="m-value" id="customerTurnsCount">2 turns</span>
+                </div>
+                <div class="metric-card">
+                  <span class="m-label">Lead Preservation Rule</span>
+                  <span class="m-value text-emerald" id="leadRuleApplied">High Recall Lead</span>
+                </div>
+              </div>
+
+              <!-- Rationale Block -->
+              <div class="explanation-box">
+                <h4>Decision Rationale</h4>
+                <p id="decisionReason">Customer demonstrated positive interest signal which overrides earlier hesitation.</p>
+                <div class="tags-container" id="signalTags"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Turns Tab Content -->
+        <div id="turnsTab" class="tab-content">
+          <div class="turns-container" id="turnsContainer">
+            <p class="placeholder-text">No parsed turns yet. Run a classification to visualize turn breakdown.</p>
+          </div>
+        </div>
+
+        <!-- Raw JSON Tab Content -->
+        <div id="jsonTab" class="tab-content">
+          <div class="json-viewer-wrapper">
+            <div class="json-header">
+              <span>Section 20 API Strict Response</span>
+              <button class="copy-json-btn" id="copyJsonBtn">Copy JSON</button>
+            </div>
+            <pre class="json-code" id="rawJsonDisplay"><code>{\n  "status": "waiting"\n}</code></pre>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer Information -->
+    <footer class="app-footer">
+      <div class="footer-notes">
+        <span>✓ <strong>Intent vs Sentiment</strong>: Evaluates commercial intent, not emotion</span>
+        <span>✓ <strong>High Recall Policy</strong>: Ambiguity & questions preserved as leads</span>
+        <span>✓ <strong>Multilingual</strong>: English • Hindi • Marathi • Hinglish</span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

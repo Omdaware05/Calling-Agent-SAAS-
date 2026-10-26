@@ -1,0 +1,72 @@
+# ============================================================
+# Root docker-compose.yml — Calling Agent Full Stack
+#
+# Starts the custom backend (port 8001) and frontend (port 5174).
+# Dograh infrastructure (postgres, redis, minio, api:8000, ui:3010)
+# is managed SEPARATELY via:
+#   cd dograh && docker compose --profile tunnel up -d
+#
+# Start everything:
+#   1. cd dograh  ->  docker compose --profile tunnel up -d
+#   2. cd ..      ->  docker compose up -d
+#
+# Stop:
+#   docker compose down
+# ============================================================
+
+services:
+
+  # ---------------------------------------------------------
+  # Custom Backend - FastAPI on port 8001
+  # Bridges the frontend with the Dograh Voice Engine.
+  # Connects to the host-resident PostgreSQL (port 5433),
+  # and the Dograh API/Redis/MinIO exposed on host ports.
+  # ---------------------------------------------------------
+  backend:
+    image: calling-agent-backend:latest
+    container_name: calling-agent-backend
+    env_file:
+      - ./backend/.env
+    environment:
+      IN_DOCKER: "true"
+      # Point Dograh API at the Docker-exposed host port (8000)
+      DOGRAH_BASE_URL: "http://host.docker.internal:8000"
+      # PostgreSQL running on host port 5433
+      DATABASE_URL: "postgresql+asyncpg://postgres:Pass@123@host.docker.internal:5433/voxora"
+      # Redis running in Dograh containers (exposed on host port 6379)
+      REDIS_URL: "redis://:088e716c0c6961b6419796aa172a0f0570e3fb78c23e9d6cf655c45785b90368@host.docker.internal:6379/0"
+      # MinIO running in Dograh containers (exposed on host port 9000)
+      S3_ENDPOINT_URL: "http://host.docker.internal:9000"
+    ports:
+      - "8001:8001"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - ca-network
+
+  # ---------------------------------------------------------
+  # Frontend - React + Vite served by Nginx on port 5174
+  # Proxies API calls to the backend container.
+  # ---------------------------------------------------------
+  frontend:
+    image: calling-agent-frontend:latest
+    container_name: calling-agent-frontend
+    environment:
+      VITE_API_BASE_URL: "http://localhost:8001"
+    ports:
+      - "5174:5174"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - ca-network
+
+networks:
+  ca-network:
+    driver: bridge

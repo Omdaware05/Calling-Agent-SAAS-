@@ -1,0 +1,110 @@
+[
+  {
+    "voice_id": "shubh",
+    "name": "Shubh - Northern Conversational",
+    "gender": "male",
+    "language": "hi",
+    "accent": "in",
+    "description": "Authentic conversational male voice, optimized for Hindi customer support, sales outreach, and inquiries.",
+    "preview_url": "http://localhost:8001/api/voice/preview-sarvam/shubh"
+  },
+  {
+    "voice_id": "ritu",
+    "name": "Ritu - Warm Professional",
+    "gender": "female",
+    "language": "hi",
+    "accent": "in",
+    "description": "Polite, friendly female Hindi speaker for general inquiries, appointments, and welcoming customer interactions.",
+    "preview_url": "http://localhost:8001/api/voice/preview-sarvam/ritu"
+  },
+  {
+    "voice_id": "aditya",
+    "name": "Aditya - Regional Articulate",
+    "gender": "male",
+    "language": "mr",
+    "accent": "in",
+    "description": "Warm regional tone for Marathi, Hindi, and English customer interactions and consultative discussions.",
+    "preview_url": "http://localhost:8001/api/voice/preview-sarvam/aditya"
+  },
+  {
+    "voice_id": "priya",
+    "name": "Priya - Southern Fluent",
+    "gender": "female",
+    "language": "ta",
+    "accent": "in",
+    "description": "Fluent regional voice for Tamil, Telugu, and Hindi customer support and advisory services.",
+    "preview_url": "http://localhost:8001/api/voice/preview-sarvam/priya"
+  },
+  {
+    "voice_id": "rahul",
+    "name": "Rahul - High Confidence",
+    "gender": "male",
+    "language": "pa",
+    "accent": "in",
+    "description": "Confident male voice with natural Punjabi and Hindi cadence for retail notifications and lead updates.",
+    "preview_url": "http://localhost:8001/api/voice/preview-sarvam/rahul"
+  },
+  {
+    "voice_id": "pooja",
+    "name": "Pooja - Dynamic & Friendly",
+    "gender": "female",
+    "language": "hi",
+    "accent": "in",
+    "description": "Bright, energetic female tone ideal for promotions, reminders, surveys, and customer engagement.",
+    "preview_url": "http://localhost:8001/api/voice/preview-sarvam/pooja"
+  },
+  {
+    "voice_id": "rohan",
+    "name": "Rohan - Executive Diction",
+    "gender": "male",
+    "language": "hi",
+    "accent": "in",
+    "description": "Polished corporate voice suited for business banking, high-value client communication, and reminders.",
+    "preview_url": "http://localhost:8001/api/voice/preview-sarvam/rohan"
+  },
+  {
+    "voice_id": "kavya",
+    "name": "Kavya - Empathetic Care",
+    "gender": "female",
+    "language": "hi",
+    "accent": "in",
+    "description": "Gentle, reassuring tone best suited for clinic bookings, customer satisfaction, and support callbacks.",
+    "preview_url": "http://localhost:8001/api/voice/preview-sarvam/kavya"
+  },
+  {
+    "voice_id": "neha",
+    "name": "Neha - Conversational Advisor",
+    "gender": "female",
+    "language": "hi",
+    "accent": "in",
+    "description": "Clear and natural conversational tone for telecom inquiries, insurance advice, and product walkthroughs.",
+    "preview_url": "http://localhost:8001/api/voice/preview-sarvam/neha"
+  },
+  {
+    "voice_id": "simran",
+    "name": "Simran - Warm Hospitality",
+    "gender": "female",
+    "language": "hi",
+    "accent": "in",
+    "description": "Welcoming, courteous voice optimized for hospitality bookings, feedback collection, and reception.",
+    "preview_url": "http://localhost:8001/api/voice/preview-sarvam/simran"
+  },
+  {
+    "voice_id": "amit",
+    "name": "Amit - High Clarity Male",
+    "gender": "male",
+    "language": "hi",
+    "accent": "in",
+    "description": "Sharp, articulate male tone for KYC verification, confirmation alerts, and security reminders.",
+    "preview_url": "http://localhost:8001/api/voice/preview-sarvam/amit"
+  },
+  {
+    "voice_id": "ashutosh",
+    "name": "Ashutosh - Trustworthy Banking",
+    "gender": "male",
+    "language": "hi",
+    "accent": "in",
+    "description": "Deep, reassuring Hindi voice for financial advisory, investment followups, and loan eligibility.",
+    "preview_url": "http://localhost:8001/api/voice/preview-sarvam/ashutosh"
+  }
+]
