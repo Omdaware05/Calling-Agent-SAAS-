@@ -1,3 +1,5 @@
+import uuid
+from app.config import settings
 import logging
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
@@ -190,6 +192,7 @@ async def start_calls(
 ):
     """
     Initiate outbound voice calls using the specified agent.
+    Enqueues all numbers into BatchDialerService to run with strict concurrency control.
     """
     agent = await agent_service.get_agent(db, agent_id)
     if not agent:
@@ -198,6 +201,8 @@ async def start_calls(
     if not agent.enabled:
         raise HTTPException(status_code=400, detail=f"Agent '{agent.name}' is disabled. Please enable it first.")
 
+    concurrency = max(1, min(20, int(request.concurrency or agent.concurrency or 1)))
+
     queued_ids = []
     errors = []
     for raw_phone in request.phone_numbers:
@@ -205,32 +210,50 @@ async def start_calls(
         if not phone:
             continue
         try:
-            init_req = InitiateCallRequest(
-                phone_number=phone,
-                agent_id=agent_id,
-                initial_context={
-                    "provider": request.provider,
-                    "language": request.language,
-                    "questionnaire_id": request.questionnaire_id,
-                },
-            )
-            call = await call_service.initiate_call(db, init_req)
-            queued_ids.append(call.id)
-        except DograhServiceException as e:
-            logger.error(f"Dograh error starting call to {phone}: {e.message}")
-            errors.append(f"{phone}: {e.message}")
+            norm_phone = validate_and_normalize_phone(phone)
         except Exception as e:
-            logger.error(f"Error starting call to {phone}: {e}")
-            errors.append(f"{phone}: {str(e)}")
+            errors.append(f"{phone}: {e}")
+            continue
 
-    if not queued_ids and errors:
-        raise HTTPException(status_code=400, detail="; ".join(errors))
+        call_id = str(uuid.uuid4())
+        call = Call(
+            id=call_id,
+            tenant_id=agent.tenant_id,
+            agent_id=agent.id,
+            phone_number=norm_phone,
+            caller_number=getattr(agent, "telephony_from_number", None) or settings.VOBIZ_FROM_NUMBER or "+918065354620",
+            status="queued",
+            disposition="queued",
+            direction="outbound",
+            context_data={
+                "provider": request.provider or getattr(agent, "telephony_provider", None) or "vobiz",
+                "language": request.language or agent.default_language or "English",
+                "questionnaire_id": request.questionnaire_id,
+            },
+        )
+        db.add(call)
+        queued_ids.append(call_id)
+
+    if not queued_ids:
+        err_msg = "; ".join(errors) if errors else "No valid phone numbers provided."
+        raise HTTPException(status_code=400, detail=err_msg)
+
+    await db.commit()
+
+    # Hand off to background BatchDialerService
+    from app.services.batch_dialer_service import batch_dialer_service
+    await batch_dialer_service.enqueue_batch(
+        agent_id=agent.id,
+        call_ids=queued_ids,
+        concurrency=concurrency,
+    )
 
     return {
         "status": "QUEUED",
         "queued": len(queued_ids),
         "call_ids": queued_ids,
-        "message": f"Successfully initiated {len(queued_ids)} call(s)",
+        "concurrency": concurrency,
+        "message": f"Successfully queued {len(queued_ids)} call(s) with {concurrency}x concurrency. Dialing started in background.",
     }
 
 

@@ -835,6 +835,90 @@ class CallService:
             ) from exc
 
     @staticmethod
+    async def dispatch_existing_call(call_id: str) -> Optional[Call]:
+        """
+        Executes outbound dialing for a previously queued Call record.
+        Runs under strict concurrency control via BatchDialerService.
+        """
+        async with AsyncSessionLocal() as session:
+            stmt = select(Call).where(Call.id == call_id)
+            res = await session.execute(stmt)
+            call = res.scalar_one_or_none()
+            if not call:
+                logger.error(f"[CallService] Call {call_id} not found for dispatch")
+                return None
+
+            if call.status in TERMINAL_STATES:
+                logger.info(f"[CallService] Call {call_id} is already in terminal state '{call.status}', skipping")
+                return call
+
+            agent_stmt = select(Agent).where(Agent.id == call.agent_id)
+            agent_res = await session.execute(agent_stmt)
+            agent = agent_res.scalar_one_or_none()
+            if not agent or not agent.enabled:
+                call.status = STATUS_FAILED
+                call.ended_at = datetime.now(UTC)
+                await persist_call_event(session, call.id, "call.failed", {"error": "Agent not found or disabled"})
+                await session.commit()
+                return call
+
+            context = call.context_data or {}
+            target_provider = str(context.get("provider") or getattr(agent, "telephony_provider", None) or "vobiz").lower()
+            voice_engine = getattr(settings, "VOICE_ENGINE", "sarvam").lower()
+
+            caller_id = getattr(agent, "telephony_from_number", None) or settings.VOBIZ_FROM_NUMBER or "+918065354620"
+            custom_tel_auth_id = (getattr(agent, "telephony_auth_id", None) or "").strip() or None
+            custom_tel_auth_token = (getattr(agent, "telephony_auth_token", None) or "").strip() or None
+
+            call.started_at = datetime.now(UTC)
+            call.status = STATUS_INITIATING
+            await session.commit()
+
+            if voice_engine == "sarvam" and target_provider == "vobiz":
+                try:
+                    from app.services.sarvam_telephony_service import sarvam_telephony_service
+                    vobiz_resp = await sarvam_telephony_service.initiate_vobiz_call(
+                        call_id=call.id,
+                        to_number=call.phone_number,
+                        from_number=caller_id,
+                        auth_id=custom_tel_auth_id,
+                        auth_token=custom_tel_auth_token,
+                    )
+                    call_uuid = vobiz_resp.get("call_uuid", "")
+                    call.telephony_call_id = call_uuid
+                    await persist_call_event(session, call.id, "call.initiated", {"vobiz_call_uuid": call_uuid, "engine": "sarvam"})
+                    await session.commit()
+                    return call
+                except Exception as sarvam_err:
+                    logger.error(f"[CallService] VoBiz dispatch failed for call {call_id}: {sarvam_err}")
+                    call.status = STATUS_FAILED
+                    call.ended_at = datetime.now(UTC)
+                    await persist_call_event(session, call.id, "call.failed", {"error": str(sarvam_err)})
+                    await session.commit()
+                    return call
+
+            # Fallback to Dograh
+            try:
+                dograh_resp = await dograh_service.initiate_call(
+                    phone_number=call.phone_number,
+                    trigger_path=agent.dograh_trigger_path,
+                    workflow_id=agent.dograh_workflow_id,
+                    initial_context=context,
+                )
+                run_id = dograh_resp.get("run_id") or dograh_resp.get("id")
+                call.dograh_run_id = run_id
+                await persist_call_event(session, call.id, "call.initiated", {"dograh_run_id": run_id, "engine": "dograh"})
+                await session.commit()
+                return call
+            except Exception as dograh_err:
+                logger.error(f"[CallService] Dograh dispatch failed for call {call_id}: {dograh_err}")
+                call.status = STATUS_FAILED
+                call.ended_at = datetime.now(UTC)
+                await persist_call_event(session, call.id, "call.failed", {"error": str(dograh_err)})
+                await session.commit()
+                return call
+
+    @staticmethod
     async def get_call_status(session: AsyncSession, call_id: str) -> Optional[Call]:
         stmt = (
             select(Call)
