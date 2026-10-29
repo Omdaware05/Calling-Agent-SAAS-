@@ -217,6 +217,65 @@ class SarvamTelephonyService:
         return self.default_voice or "shubh"
 
     @staticmethod
+    def normalize_indic_transcript(text: str) -> str:
+        """
+        Normalizes Indic speech-to-text transcriptions, correcting common phonetic
+        misinterpretations of Marathi/Hindi numbers, acreages, and seed varieties.
+        """
+        if not text:
+            return ""
+        t = text
+        corrections = [
+            # Spoken Marathi/Hindi numbers + Acreage
+            ("सहायक कर", "६ एकर"),
+            ("सहा एकर", "६ एकर"),
+            ("सहा एकड़", "६ एकर"),
+            ("६ एकड़", "६ एकर"),
+            ("साथ ही सर", "७ एकर"),
+            ("सात एकर", "७ एकर"),
+            ("सात एकड़", "७ एकर"),
+            ("७ एकड़", "७ एकर"),
+            ("बात एक और", "५ एकर"),
+            ("पाच एकर", "५ एकर"),
+            ("पाच एकड़", "५ एकर"),
+            ("५ एकड़", "५ एकर"),
+            ("दोन एकर", "२ एकर"),
+            ("दो एकड़", "२ एकर"),
+            ("तीन एकर", "३ एकर"),
+            ("तीन एकड़", "३ एकर"),
+            ("चार एकर", "४ एकर"),
+            ("चार एकड़", "४ एकर"),
+            ("दहा एकर", "१० एकर"),
+            ("दस एकड़", "१० एकर"),
+            ("एका एकर", "१ एकर"),
+            ("एक एकर", "१ एकर"),
+            ("एक एकड़", "१ एकर"),
+            ("वीस किलो", "२० किलो"),
+            ("तीस किलो", "३० किलो"),
+            ("चाळीस किलो", "४० किलो"),
+            ("पन्नास किलो", "५० किलो"),
+            ("शंभर किलो", "१०० किलो"),
+            ("दोनशे किलो", "२०० किलो"),
+            # Crop & Variety phonetic slips
+            ("लोगों के बारे में", "लोकवन बद्दल"),
+            ("लोगों के बारे", "लोकवन बद्दल"),
+            ("लोकमन", "लोकवन"),
+            ("लोक वन", "लोकवन"),
+            ("दिग विजय", "दिग्विजय"),
+            # Questions asked by farmer
+            ("का है इसका", "याचे दर काय आहेत"),
+            ("का भाव आहे", "याचे दर काय आहेत"),
+            ("काय भाव आहे", "याचे दर काय आहेत"),
+            ("भाव काय", "दर काय आहेत"),
+            ("रेट काय", "दर काय आहेत"),
+            ("कोणता रिकमेंड", "कोणता प्रकार चांगला आहे"),
+            ("कौन सा रिकमेंड", "कोणता प्रकार चांगला आहे"),
+        ]
+        for src, target in corrections:
+            t = t.replace(src, target)
+        return t
+
+    @staticmethod
     def is_refusal_or_call_termination(text: str) -> bool:
         """
         Detects if the caller wants to end the call, refuses, or is not interested.
@@ -751,6 +810,15 @@ class SarvamTelephonyService:
         energy_threshold = 300  # RMS threshold for caller voice activity detection
         sequence_counter = 1
 
+        # Active conversation context tracker (remembers stated acreage, crop, timing, etc.)
+        context_state = {
+            "crop": None,
+            "timing": None,
+            "acreage": None,
+            "quantity": None,
+            "variety": None,
+        }
+
         recorded_timeline: List[tuple] = []
 
         async def play_audio_task(mulaw_data: bytes):
@@ -782,8 +850,43 @@ class SarvamTelephonyService:
                 logger.info("[SarvamTelephony] STT returned empty transcription.")
                 return
 
-            logger.info(f"[SarvamTelephony] Caller said: '{user_text}' (STT took {stt_duration_ms}ms)")
+            logger.info(f"[SarvamTelephony] Raw STT caller text: '{user_text}' (took {stt_duration_ms}ms)")
+            # 0. Phonetic & agricultural normalizer: accurately restores numbers and terms
+            user_text = self.normalize_indic_transcript(user_text)
+            logger.info(f"[SarvamTelephony] Normalized caller text: '{user_text}'")
             conversation_history.append({"role": "user", "content": user_text})
+
+            # Update context_state from caller speech
+            u_clean = user_text.lower()
+            if "गहू" in u_clean or "wheat" in u_clean:
+                context_state["crop"] = "गहू"
+            elif "हरभरा" in u_clean or "चना" in u_clean or "chana" in u_clean:
+                context_state["crop"] = "हरभरा"
+
+            if "आता" in u_clean or "now" in u_clean:
+                context_state["timing"] = "आता"
+            elif "नंतर" in u_clean or "later" in u_clean:
+                context_state["timing"] = "नंतर"
+
+            import re
+            acre_match = re.search(r"(\d+|एक|दोन|तीन|चार|पाच|सहा|सात|आठ|नऊ|दहा)\s*(?:एकर|एकड़)", user_text)
+            if acre_match:
+                context_state["acreage"] = acre_match.group(0)
+                logger.info(f"[SarvamTelephony] Saved context: Acreage = {context_state['acreage']}")
+
+            qty_match = re.search(r"(\d+|वीस|तीस|चाळीस|पन्नास|शंभर|दोनशे)\s*(?:किलो|बॅग)", user_text)
+            if qty_match:
+                context_state["quantity"] = qty_match.group(0)
+                logger.info(f"[SarvamTelephony] Saved context: Quantity = {context_state['quantity']}")
+
+            if "लोकवन" in user_text:
+                context_state["variety"] = "लोकवन"
+            elif "शरबती" in user_text:
+                context_state["variety"] = "शरबती"
+            elif "दिग्विजय" in user_text:
+                context_state["variety"] = "दिग्विजय"
+            elif "विजय" in user_text:
+                context_state["variety"] = "विजय"
 
             # Persist caller transcript segment in DB with accurate timestamps
             async with AsyncSessionLocal() as session:
@@ -958,39 +1061,74 @@ class SarvamTelephonyService:
                 conversation_history.append({"role": "assistant", "content": greeting})
                 return
 
-            # 4. Generate next turn with Anti-Repetition and Language Locking
+            # 4. Generate next turn with Context Memory & Direct Q&A
             agent_speech_start = time.time()
-            full_reply = await self.generate_llm_response(conversation_history, system_prompt)
-
-            # Strict Anti-Repetition Guard: Never repeat recent question topics
             prev_agent_texts = [m["content"] for m in conversation_history if m.get("role") == "assistant"]
-            is_repeating = False
-            for prev in prev_agent_texts[-3:]:
-                for stem in ["एकड़", "एकर", "कितने किलो", "किती किलो", "व्हरायटी", "किस्म", "कधीपर्यंत", "कब तक", "खरीदना चाहेंगे"]:
-                    if stem in full_reply and stem in prev:
-                        is_repeating = True
-                        break
-                if is_repeating:
-                    break
 
-            if is_repeating:
-                logger.info(f"[SarvamTelephony] Duplicate question stem detected in '{full_reply}'. Substituting progression turn.")
+            # Direct Q&A handlers: Answer customer questions directly instead of ignoring them!
+            direct_reply = None
+            if any(q in user_text for q in ["कोणता प्रकार", "कोणती व्हरायटी", "रिकमेंड", "चांगला आहे", "कोणता चांगला"]):
                 if "mr" in lang_code:
-                    progression_options = [
-                        "काही हरकत नाही! आपण बियाण्यांचे दर किंवा उपलब्ध व्हरायटींबद्दल जाणून घेऊ इच्छिता का?",
-                        "ठीक आहे! आमच्याकडे गव्हासाठी लोकवन आणि हरभऱ्यासाठी विजय व्हरायटी उपलब्ध आहेत.",
-                        "नक्कीच! अधिक माहिती आणि बुकिंगसाठी आमच्या टीमकडून कॉल हवा आहे का?"
-                    ]
+                    direct_reply = "उत्पादनासाठी गव्हामध्ये लोकवन आणि हरभऱ्यामध्ये दिग्विजय ही व्हरायटी सर्वोत्तम आहे! आपण किती एकरासाठी नियोजन करत आहात?"
                 else:
-                    progression_options = [
-                        "कोई बात नहीं जी! क्या आप बीजों के दाम या उपलब्ध किस्मों के बारे में जानना चाहते हैं?",
-                        "ठीक है जी! हमारे पास लोकवन और विजय जैसी उच्च उपज वाली किस्में उपलब्ध हैं।",
-                        "बिल्कुल! क्या बुकिंग और अधिक जानकारी के लिए हमारी टीम आपको कॉल करे?"
-                    ]
-                for opt in progression_options:
-                    if not any(opt[:10] in prev for prev in prev_agent_texts):
-                        full_reply = opt
-                        break
+                    direct_reply = "उपज के लिए गेहूँ में लोकवन और चने में दिग्विजय सबसे उत्तम किस्म है! आप कितने एकड़ के लिए सोच रहे हैं?"
+
+            elif any(q in user_text for q in ["दर काय", "भाव काय", "किंमत काय", "काय भाव", "का भाव", "रेट काय"]):
+                if "mr" in lang_code:
+                    direct_reply = "प्रमाणित लोकवन गहू ४२ रुपये किलो आणि हरभरा ७८ रुपये किलो आहे. आपण किती किलो बियाणे घेणार आहात?"
+                else:
+                    direct_reply = "प्रमाणित लोकवन गेहूँ ४२ रुपये किलो और चना ७८ रुपये किलो है। आपको लगभग कितने किलो बीज चाहिए?"
+
+            elif "लोकवन" in user_text and any(q in user_text for q in ["माहिती", "सांगा", "बद्दल", "फायदे"]):
+                if "mr" in lang_code:
+                    direct_reply = "लोकवन गव्हाची ओंबी मोठी भरते, दाणा टपोरा येतो आणि एकरी १८ ते २० क्विंटल उत्पादन मिळते! बुकिंग करायची आहे का?"
+                else:
+                    direct_reply = "लोकवन गेहूँ की बाली बड़ी और दाना चमकदार होता है, प्रति एकड़ १८ से २० क्विंटल पैदावार मिलती है!"
+
+            elif "शरबती" in user_text and any(q in user_text for q in ["माहिती", "सांगा", "बद्दल", "फायदे"]):
+                if "mr" in lang_code:
+                    direct_reply = "शरबती गहू खाण्यासाठी अत्यंत चवदार व मऊ चपातीसाठी प्रसिद्ध आहे आणि बाजारात चांगला भाव मिळतो!"
+                else:
+                    direct_reply = "शरबती गेहूँ खाने में स्वादिष्ट और मुलायम रोटियों के लिए जाना जाता है, मंडी में बढ़िया भाव मिलता है!"
+
+            if direct_reply:
+                full_reply = direct_reply
+                logger.info(f"[SarvamTelephony] Direct Q&A matched: '{full_reply}'")
+            else:
+                # Inject saved context into dynamic prompt so LLM remembers known facts
+                dynamic_system_prompt = system_prompt
+                ctx_parts = []
+                if context_state["crop"]:
+                    ctx_parts.append(f"पिक: {context_state['crop']}")
+                if context_state["timing"]:
+                    ctx_parts.append(f"खरेदी वेळ: {context_state['timing']}")
+                if context_state["acreage"]:
+                    ctx_parts.append(f"जमीन: {context_state['acreage']} (ALREADY KNOWN - DO NOT ASK FOR ACREAGE AGAIN)")
+                if context_state["quantity"]:
+                    ctx_parts.append(f"प्रमाण: {context_state['quantity']} (ALREADY KNOWN - DO NOT ASK FOR QUANTITY AGAIN)")
+                if context_state["variety"]:
+                    ctx_parts.append(f"पसंतीची व्हरायटी: {context_state['variety']}")
+
+                if ctx_parts:
+                    dynamic_system_prompt += f"\n\n[CURRENT SAVED CALL CONTEXT: {' | '.join(ctx_parts)}]"
+
+                full_reply = await self.generate_llm_response(conversation_history, dynamic_system_prompt)
+
+            # Strict Anti-Repetition Guard: If acreage is already known, never ask for acreage again
+            if context_state["acreage"] and any(w in full_reply for w in ["किती एकर", "कितने एकड़"]):
+                logger.info(f"[SarvamTelephony] Acreage {context_state['acreage']} already known. Suppressing duplicate acreage question.")
+                if "mr" in lang_code:
+                    full_reply = f"{context_state['acreage']} साठी खूप छान! साधारण किती किलो बियाणे हवे आहे किंवा दर जाणून घ्यायचे आहेत का?"
+                else:
+                    full_reply = f"{context_state['acreage']} के लिए बहुत बढ़िया! लगभग कितने किलो बीज चाहिए या भाव जानना चाहेंगे?"
+
+            # General duplicate reply check
+            if any(full_reply.strip("।,?!. ") == prev.strip("।,?!. ") for prev in prev_agent_texts[-3:]):
+                logger.info(f"[SarvamTelephony] Exact repeat detected in '{full_reply}'. Progressing turn.")
+                if "mr" in lang_code:
+                    full_reply = "नक्कीच! अधिक माहिती आणि बुकिंगसाठी आमच्या प्रतिनिधीकडून कॉल हवा आहे का?"
+                else:
+                    full_reply = "बिल्कुल! अधिक जानकारी और बुकिंग के लिए क्या हमारे प्रतिनिधि आपको कॉल करें?"
 
             # Strict Marathi Language Guard: Prevent any Hindi dialect leak in Marathi calls
             if "mr" in lang_code:
