@@ -92,8 +92,21 @@ class BatchDialerService:
                 logger.info(f"[BatchDialer] Worker #{worker_index} handling Call {call_id}. Remaining in queue: {queue.qsize()}")
 
                 # Step 1: Dispatch call out to carrier
-                call = await call_service.dispatch_existing_call(call_id)
-                if not call or call.status == "failed":
+                try:
+                    call = await call_service.dispatch_existing_call(call_id)
+                except Exception as dispatch_err:
+                    logger.error(f"[BatchDialer] Error dispatching call {call_id}: {dispatch_err}", exc_info=True)
+                    async with AsyncSessionLocal() as session:
+                        err_c = await session.get(Call, call_id)
+                        if err_c:
+                            err_c.status = "failed"
+                            err_c.ended_at = datetime.now(UTC)
+                            await session.commit()
+                    queue.task_done()
+                    await asyncio.sleep(1.0)
+                    continue
+
+                if not call or call.status in ("failed", "busy", "no_answer", "cancelled"):
                     logger.warning(f"[BatchDialer] Call {call_id} dispatch could not initiate or failed immediately. Moving to next.")
                     queue.task_done()
                     await asyncio.sleep(1.0)
@@ -154,3 +167,4 @@ class BatchDialerService:
 
 
 batch_dialer_service = BatchDialerService()
+

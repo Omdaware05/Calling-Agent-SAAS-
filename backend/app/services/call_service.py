@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.database import AsyncSessionLocal
 from app.config import settings
 from app.models.agent import Agent
 from app.models.tenant import Tenant
@@ -34,6 +35,7 @@ class CallServiceException(Exception):
 
 
 # Canonical status set
+STATUS_QUEUED = "queued"
 STATUS_INITIATING = "initiating"
 STATUS_RINGING = "ringing"
 STATUS_IN_PROGRESS = "in_progress"
@@ -42,7 +44,7 @@ STATUS_BUSY = "busy"
 STATUS_NO_ANSWER = "no_answer"
 STATUS_FAILED = "failed"
 
-TERMINAL_STATES = {STATUS_COMPLETED, STATUS_BUSY, STATUS_NO_ANSWER, STATUS_FAILED}
+TERMINAL_STATES = {STATUS_COMPLETED, STATUS_BUSY, STATUS_NO_ANSWER, STATUS_FAILED, "hangup", "cancelled"}
 
 
 def validate_and_normalize_phone(phone_number: str) -> str:

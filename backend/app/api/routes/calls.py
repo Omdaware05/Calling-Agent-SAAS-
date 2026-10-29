@@ -30,7 +30,8 @@ router = APIRouter(prefix="/calls", tags=["calls"], dependencies=[Depends(verify
 def map_call_to_document(c: Call) -> Dict[str, Any]:
     raw_st = (c.status or "initiating").lower()
     state_map = {
-        "initiating": "QUEUED",
+        "queued": "QUEUED",
+        "initiating": "DIALING",
         "ringing": "RINGING",
         "in_progress": "CONNECTED",
         "completed": "COMPLETED",
@@ -38,7 +39,7 @@ def map_call_to_document(c: Call) -> Dict[str, Any]:
         "no_answer": "NO_ANSWER",
         "failed": "FAILED",
     }
-    state = state_map.get(raw_st, "COMPLETED")
+    state = state_map.get(raw_st, raw_st.upper())
 
     # Load real segments from relation
     segments = []

@@ -346,7 +346,7 @@ async def get_agent_dashboard(
     completed_count = status_dict.get("completed", 0)
     failed_count = status_dict.get("failed", 0) + status_dict.get("busy", 0) + status_dict.get("no_answer", 0)
     active_count = status_dict.get("in_progress", 0) + status_dict.get("ringing", 0)
-    queued_count = status_dict.get("initiating", 0)
+    queued_count = status_dict.get("initiating", 0) + status_dict.get("queued", 0)
 
     # Average duration
     dur_stmt = select(func.avg(Call.duration)).where(Call.agent_id == agent_id, Call.duration.isnot(None))
@@ -359,7 +359,7 @@ async def get_agent_dashboard(
 
     recent_mapped = []
     for c in calls[:10]:
-        state = (c.status or "completed").upper()
+        state = (c.status or "queued").upper()
         if state == "IN_PROGRESS":
             state = "CONNECTED"
         recent_mapped.append({
