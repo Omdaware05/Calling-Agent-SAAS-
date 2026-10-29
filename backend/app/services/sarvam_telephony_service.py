@@ -955,29 +955,7 @@ class SarvamTelephonyService:
                         or msg.get("streamId")
                         or call_id
                     )
-                    logger.info(f"[SarvamTelephony] Call connected (streamId: {stream_id}). Immediately playing pre-loaded opening greeting...")
-                    if not greeting_delivered and greeting_mulaw:
-                        greeting_delivered = True
-                        greeting_started_time = time.time()
-                        current_turn_task = asyncio.create_task(play_audio_task(greeting_mulaw))
-                        conversation_history.append({"role": "assistant", "content": greeting})
-                        async with AsyncSessionLocal() as session:
-                            stmt = select(Transcript).where(Transcript.call_id == call_id)
-                            tr = (await session.execute(stmt)).scalar_one_or_none()
-                            if tr:
-                                session.add(
-                                    TranscriptSegment(
-                                        transcript_id=tr.id,
-                                        speaker="agent",
-                                        text=greeting,
-                                        start_time=0.0,
-                                        end_time=round(time.time() - call_start_time + 3.0, 2),
-                                        sequence=sequence_counter,
-                                        confidence=1.0,
-                                    )
-                                )
-                                await session.commit()
-                        sequence_counter += 1
+                    logger.info(f"[SarvamTelephony] VoBiz start event received. Captured streamId: {stream_id}. Waiting for caller speech before greeting...")
 
                 elif event == "media":
                     now = time.time()
@@ -985,30 +963,31 @@ class SarvamTelephonyService:
                     if not stream_id:
                         stream_id = msg.get("streamId") or msg.get("media", {}).get("streamId") or call_id
 
-                    # Instant playback on first media chunk if start event didn't trigger it yet
-                    if not greeting_delivered and greeting_mulaw:
-                        logger.info(f"[SarvamTelephony] Delivering pre-loaded greeting on first media chunk to streamId: {stream_id}")
-                        greeting_delivered = True
-                        greeting_started_time = now
-                        current_turn_task = asyncio.create_task(play_audio_task(greeting_mulaw))
-                        conversation_history.append({"role": "assistant", "content": greeting})
-                        async with AsyncSessionLocal() as session:
-                            stmt = select(Transcript).where(Transcript.call_id == call_id)
-                            tr = (await session.execute(stmt)).scalar_one_or_none()
-                            if tr:
-                                session.add(
-                                    TranscriptSegment(
-                                        transcript_id=tr.id,
-                                        speaker="agent",
-                                        text=greeting,
-                                        start_time=0.0,
-                                        end_time=round(now - call_start_time + 3.0, 2),
-                                        sequence=sequence_counter,
-                                        confidence=1.0,
+                    # Fallback watchdog: if caller stays silent for 5.0 seconds after connect, gently initiate greeting
+                    if not greeting_delivered and not is_agent_speaking and not is_user_speaking:
+                        if (now - call_start_time) > 5.0 and len(audio_buffer) == 0:
+                            logger.info(f"[SarvamTelephony] Caller silent after connect (5.0s). Delivering opening greeting to streamId: {stream_id}")
+                            greeting_delivered = True
+                            greeting_started_time = now
+                            current_turn_task = asyncio.create_task(play_audio_task(greeting_mulaw))
+                            conversation_history.append({"role": "assistant", "content": greeting})
+                            async with AsyncSessionLocal() as session:
+                                stmt = select(Transcript).where(Transcript.call_id == call_id)
+                                tr = (await session.execute(stmt)).scalar_one_or_none()
+                                if tr:
+                                    session.add(
+                                        TranscriptSegment(
+                                            transcript_id=tr.id,
+                                            speaker="agent",
+                                            text=greeting,
+                                            start_time=round(now - call_start_time, 2),
+                                            end_time=round(now + 3.0 - call_start_time, 2),
+                                            sequence=sequence_counter,
+                                            confidence=1.0,
+                                        )
                                     )
-                                )
-                                await session.commit()
-                        sequence_counter += 1
+                                    await session.commit()
+                            sequence_counter += 1
 
                     media_payload = msg.get("media", {}).get("payload", "")
                     if not media_payload:
