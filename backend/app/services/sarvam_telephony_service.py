@@ -697,17 +697,27 @@ class SarvamTelephonyService:
                 else:
                     greeting = f"{greeting.rstrip('।,?!.')}। क्या आप हमारी सेवाओं में इंटरेस्टेड हैं?"
 
+        if "mr" in lang_code:
+            lang_rules = (
+                f"STRICT MARATHI LANGUAGE LOCK:\n"
+                f"- Speak ONLY in pure, polite, and respectful Marathi (मराठी) in Devanagari script.\n"
+                f"- NEVER switch to Hindi! Never use Hindi words like 'बहुत बढ़िया', 'क्या आप', 'बताइए', 'बीज', 'गेहूँ', 'चना', 'बुवाई', 'है', 'कीजिए'.\n"
+                f"- ALWAYS use proper Marathi: 'खूप छान', 'बियाणे', 'गहू आणि हरभरा', 'पेरणी', 'सांगा', 'आहे', 'तुम्हाला / आपल्याला', 'आपण'.\n"
+            )
+        else:
+            lang_rules = f"1. Spoken Language: Respond naturally in {lang_name} ({lang_code}). Never use English roman script for Indic languages or markdown.\n"
+
         system_prompt = (
             f"You are '{agent_name}', a helpful and polite AI Voice Calling Assistant representing '{comp_name}'.\n"
             f"Company / Purpose: {comp_desc}\n\n"
             f"INSTRUCTIONS & SCRIPT:\n{agent.instructions or agent.system_prompt or ''}\n\n"
             f"RULES FOR CONVERSATIONAL PHONE CALL:\n"
-            f"1. Spoken Language: Respond naturally in {lang_name} ({lang_code}). Never use English roman script for Indic languages or markdown.\n"
+            f"{lang_rules}"
             f"2. Strict 1 Short Sentence: Keep replies strictly under 15 words total. Never give long speeches.\n"
-            f"3. PROGRESSION ONLY - NEVER REPEAT: Never repeat a question you already asked. If customer confirmed interest, proceed directly to details.\n"
-            f"4. If customer says 'हाँ' / 'yes' / 'बताइए' / agrees: Say: '{interest_followup}'\n"
-            f"5. If customer says 'नहीं' / 'no' / 'not interested' / declines: Say ONLY '{farewell_reply}' and stop.\n"
-            f"6. Concluding: If customer says 'ठीक है' or 'thank you', say '{farewell_reply}'."
+            f"3. PROGRESSION ONLY - NEVER REPEAT: Never repeat a question you already asked in this call. If customer gives a vague response like 'ठीक आहे' / 'ठीक है' / 'बघू', acknowledge it and move forward to the next step immediately. NEVER ask for the same detail twice!\n"
+            f"4. Callback Request: If customer says they are busy or want a callback ('नंतर फोन करा', 'बाद में कॉल करो', 'वेळ नाही', 'नंतर सांगा'): Say '{farewell_reply}' and do NOT ask any more questions.\n"
+            f"5. If customer declines or says no ('नाही', 'नहीं', 'नको', 'not interested'): Say ONLY '{farewell_reply}' and stop.\n"
+            f"6. Concluding: If customer says 'ठीक आहे', 'ठीक है', or 'thank you', say '{farewell_reply}'."
         )
 
         conversation_history: List[Dict[str, str]] = []
@@ -794,7 +804,75 @@ class SarvamTelephonyService:
                     await session.commit()
             sequence_counter += 1
 
-            # Check if caller refused, declined, or requested call disconnection
+            # 1. Check if caller requested a callback or is busy / postponing call
+            callback_keywords = [
+                "बाद में कॉल", "बाद में फोन", "नंतर फोन", "नंतर कॉल", "नंतर बोला", "नंतर सांगा",
+                "वेळ नाही", "टाइम नाही", "टाइम नही", "बाद में बात", "call later", "call me later",
+                "busy right now", "नंतर बोला ना", "नंतर करा", "बाद में करना", "कल कॉल", "उद्या फोन",
+                "उद्या करा", "नंतर सांगतो", "बाद में बताऊंगा"
+            ]
+            if any(k in user_text.lower() for k in callback_keywords):
+                logger.info(f"[SarvamTelephony] Caller requested callback / busy: '{user_text}'. Concluding with callback promise.")
+                if "mr" in lang_code:
+                    cb_farewell = "नक्कीच! आम्ही तुम्हाला नंतर सोयीच्या वेळी पुन्हा कॉल करू. वेळ दिल्याबद्दल खूप धन्यवाद, नमस्कार!"
+                elif "en" in lang_code:
+                    cb_farewell = "Sure! We will call you back at a convenient time. Thank you, have a great day!"
+                else:
+                    cb_farewell = "जी बिल्कुल! हम आपको बाद में सुविधानुसार कॉल करेंगे। समय देने के लिए बहुत धन्यवाद, नमस्कार!"
+
+                conversation_history.append({"role": "assistant", "content": cb_farewell})
+                cb_start = time.time()
+                cb_mulaw = await self.synthesize_speech(cb_farewell, voice=voice_id, language_code=lang_code)
+                if cb_mulaw:
+                    await play_audio_task(cb_mulaw)
+                    await asyncio.sleep(1.2)
+
+                # Persist callback farewell segment
+                async with AsyncSessionLocal() as session:
+                    stmt = select(Transcript).where(Transcript.call_id == call_id)
+                    tr = (await session.execute(stmt)).scalar_one_or_none()
+                    if tr:
+                        session.add(
+                            TranscriptSegment(
+                                transcript_id=tr.id,
+                                speaker="agent",
+                                text=cb_farewell,
+                                start_time=round(cb_start - call_start_time, 2),
+                                end_time=round(time.time() - call_start_time, 2),
+                                sequence=sequence_counter,
+                                confidence=1.0,
+                            )
+                        )
+                        await session.commit()
+                sequence_counter += 1
+
+                # Update call disposition as callback_requested
+                async with AsyncSessionLocal() as session:
+                    c = await session.get(Call, call_id)
+                    if c:
+                        c.disposition = "callback_requested"
+                        await session.commit()
+
+                # Terminate carrier call
+                try:
+                    from app.services.telephony_service import telephony_service
+                    uuid_to_hangup = carrier_call_uuid or stream_id
+                    if uuid_to_hangup:
+                        await telephony_service.hangup_live_telephony_call(
+                            call_uuid=uuid_to_hangup,
+                            auth_id=carrier_auth_id,
+                            auth_token=carrier_auth_token,
+                        )
+                except Exception as hangup_err:
+                    logger.warning(f"[SarvamTelephony] Carrier hangup error on callback: {hangup_err}")
+
+                try:
+                    await websocket.close()
+                except Exception:
+                    pass
+                return
+
+            # 2. Check if caller refused, declined, or requested call disconnection
             if self.is_refusal_or_call_termination(user_text):
                 logger.info(f"[SarvamTelephony] Caller declined / said NO: '{user_text}'. Concluding and cutting call {call_id} immediately.")
                 conversation_history.append({"role": "assistant", "content": farewell_reply})
@@ -851,7 +929,7 @@ class SarvamTelephonyService:
                     pass
                 return
 
-            # If opening greeting has not been delivered yet, deliver it NOW in response to caller's first speech!
+            # 3. If opening greeting has not been delivered yet, deliver it NOW in response to caller's first speech!
             if not greeting_delivered:
                 greeting_delivered = True
                 greeting_started_time = time.time()
@@ -880,28 +958,79 @@ class SarvamTelephonyService:
                 conversation_history.append({"role": "assistant", "content": greeting})
                 return
 
-            # Stream-and-synthesize pipeline:
-            full_reply_chunks = []
-            first_audio_dispatched = False
+            # 4. Generate next turn with Anti-Repetition and Language Locking
             agent_speech_start = time.time()
+            full_reply = await self.generate_llm_response(conversation_history, system_prompt)
 
-            async for sentence in self.stream_llm_chunks(conversation_history, system_prompt):
-                clean_s = sentence.strip()
-                if not clean_s:
-                    continue
-                full_reply_chunks.append(clean_s)
-                sentence_mulaw = await self.synthesize_speech(clean_s, voice=voice_id)
-                if sentence_mulaw:
-                    if not first_audio_dispatched:
-                        first_audio_dispatched = True
-                        total_latency = round((time.time() - t_turn_start) * 1000)
-                        logger.info(f"[SarvamTelephony] >> Ultra-fast Time To First Audio: {total_latency}ms! <<")
-                    await play_audio_task(sentence_mulaw)
+            # Strict Anti-Repetition Guard: Never repeat recent question topics
+            prev_agent_texts = [m["content"] for m in conversation_history if m.get("role") == "assistant"]
+            is_repeating = False
+            for prev in prev_agent_texts[-3:]:
+                for stem in ["एकड़", "एकर", "कितने किलो", "किती किलो", "व्हरायटी", "किस्म", "कधीपर्यंत", "कब तक", "खरीदना चाहेंगे"]:
+                    if stem in full_reply and stem in prev:
+                        is_repeating = True
+                        break
+                if is_repeating:
+                    break
 
-            full_reply = " ".join(full_reply_chunks).strip()
+            if is_repeating:
+                logger.info(f"[SarvamTelephony] Duplicate question stem detected in '{full_reply}'. Substituting progression turn.")
+                if "mr" in lang_code:
+                    progression_options = [
+                        "काही हरकत नाही! आपण बियाण्यांचे दर किंवा उपलब्ध व्हरायटींबद्दल जाणून घेऊ इच्छिता का?",
+                        "ठीक आहे! आमच्याकडे गव्हासाठी लोकवन आणि हरभऱ्यासाठी विजय व्हरायटी उपलब्ध आहेत.",
+                        "नक्कीच! अधिक माहिती आणि बुकिंगसाठी आमच्या टीमकडून कॉल हवा आहे का?"
+                    ]
+                else:
+                    progression_options = [
+                        "कोई बात नहीं जी! क्या आप बीजों के दाम या उपलब्ध किस्मों के बारे में जानना चाहते हैं?",
+                        "ठीक है जी! हमारे पास लोकवन और विजय जैसी उच्च उपज वाली किस्में उपलब्ध हैं।",
+                        "बिल्कुल! क्या बुकिंग और अधिक जानकारी के लिए हमारी टीम आपको कॉल करे?"
+                    ]
+                for opt in progression_options:
+                    if not any(opt[:10] in prev for prev in prev_agent_texts):
+                        full_reply = opt
+                        break
+
+            # Strict Marathi Language Guard: Prevent any Hindi dialect leak in Marathi calls
+            if "mr" in lang_code:
+                hindi_to_marathi = {
+                    "बहुत बढ़िया": "खूप छान",
+                    "बहुत बढीया": "खूप छान",
+                    "बीज": "बियाणे",
+                    "बीजों": "बियाण्यांचे",
+                    "गेहूँ": "गहू",
+                    "चने": "हरभरा",
+                    "चना": "हरभरा",
+                    "बुवाई": "पेरणी",
+                    "बताइए": "सांगा",
+                    "बताएं": "सांगा",
+                    "बता दीजिए": "सांगा",
+                    "करना चाहते हैं": "करू इच्छिता",
+                    "चाहेंगे": "इच्छिता",
+                    "कितने एकड़": "किती एकर",
+                    "कितने किलोग्राम": "किती किलो",
+                    "आवश्यकता होगी": "गरज असेल",
+                    "समय देने के लिए धन्यवाद": "वेळ दिल्याबद्दल धन्यवाद",
+                    "समय देने के लिए आपका बहुत धन्यवाद": "वेळ दिल्याबद्दल खूप धन्यवाद",
+                    "आपका दिन शुभ हो": "आपला दिवस शुभ जावो",
+                    "जी बिल्कुल": "नक्कीच",
+                    "कोई बात नहीं": "काही हरकत नाही",
+                }
+                for h_w, m_w in hindi_to_marathi.items():
+                    full_reply = full_reply.replace(h_w, m_w)
+
             if not full_reply:
-                full_reply = "जी, बताइए मैं आपकी कैसे सहायता कर सकता हूँ?"
+                full_reply = "सांगा, मी आपली काय मदत करू शकतो?" if "mr" in lang_code else "जी, बताइए मैं आपकी कैसे सहायता कर सकता हूँ?"
+
             logger.info(f"[SarvamTelephony] Full agent response: '{full_reply}'")
+
+            # Synthesize and stream audio
+            reply_mulaw = await self.synthesize_speech(full_reply, voice=voice_id, language_code=lang_code)
+            if reply_mulaw:
+                total_latency = round((time.time() - t_turn_start) * 1000)
+                logger.info(f"[SarvamTelephony] >> Ultra-fast Time To First Audio: {total_latency}ms! <<")
+                await play_audio_task(reply_mulaw)
             conversation_history.append({"role": "assistant", "content": full_reply})
 
             # Persist assistant transcript segment
