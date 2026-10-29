@@ -1480,6 +1480,67 @@ class SarvamTelephonyService:
 
                         intel = await lead_intelligence_service.analyze_call(session, call, segments=segs)
 
+                        # Automatic Follow-up Call Scheduling
+                        try:
+                            from app.models.lead import Followup
+                            from app.services.callback_time import schedule_from_transcript
+                            
+                            f_info = intel.get("followup") if intel else None
+                            full_transcript = "\n".join(f"{s.get('speaker', 'speaker').title()}: {s.get('text', '')}" for s in segs)
+                            parsed_callback_time = schedule_from_transcript(full_transcript)
+                            
+                            requires_followup = False
+                            sched_time = parsed_callback_time
+                            reason_action = "Scheduled follow-up"
+                            matched_text = None
+                            
+                            if parsed_callback_time:
+                                requires_followup = True
+                                reason_action = f"Customer requested callback for {parsed_callback_time.strftime('%d %b %Y, %I:%M %p')}"
+                                matched_text = f_info.get("matched_utterance") if f_info else "Specific callback time requested"
+                            elif f_info and f_info.get("requires_followup"):
+                                requires_followup = True
+                                reason_action = f"{f_info.get('name')}: {f_info.get('action')}"
+                                matched_text = f_info.get("matched_utterance")
+                                sched_iso = f_info.get("suggested_scheduled_at")
+                                if sched_iso and not sched_time:
+                                    try:
+                                        sched_time = datetime.fromisoformat(sched_iso.replace("Z", "+00:00"))
+                                    except Exception:
+                                        pass
+                            elif (call.disposition or "").lower() == "callback_requested":
+                                requires_followup = True
+                                reason_action = "Customer requested callback during conversation"
+                                matched_text = "Callback requested"
+
+                            call_phone = call.phone_number or call.caller_number
+                            if requires_followup and call_phone:
+                                fu_stmt = select(Followup).where(Followup.call_id == call.id)
+                                existing_fu = (await session.execute(fu_stmt)).scalar_one_or_none()
+                                notes_txt = f"{reason_action}. (Matched: '{matched_text or 'callback'}')"
+                                target_time = sched_time or (datetime.now(UTC) + timedelta(hours=2))
+
+                                if not existing_fu:
+                                    new_fu = Followup(
+                                        tenant_id=call.tenant_id,
+                                        contact_id=call.contact_id,
+                                        agent_id=call.agent_id,
+                                        call_id=call.id,
+                                        phone_number=call_phone,
+                                        scheduled_at=target_time,
+                                        status="scheduled",
+                                        notes=notes_txt,
+                                    )
+                                    session.add(new_fu)
+                                    logger.info(f"[SarvamTelephony] Auto-scheduled Followup for call {call.id} at {target_time}")
+                                else:
+                                    existing_fu.scheduled_at = target_time
+                                    existing_fu.notes = notes_txt
+                                    existing_fu.status = "scheduled"
+                                call.disposition = "callback_requested"
+                        except Exception as fu_err:
+                            logger.warning(f"[SarvamTelephony] Auto-followup scheduling note: {fu_err}")
+
                         data_exporter.export_call_transcript(
                             call_id=call_id,
                             phone_number=call.phone_number or call.caller_number or "",

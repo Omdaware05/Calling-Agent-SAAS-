@@ -442,20 +442,27 @@ async def persist_post_call_artifacts(session: AsyncSession, call: Call, payload
                 else:
                     followup.notes = status_notes
                     followup.scheduled_at = scheduled_time
-            elif f_info.get("requires_followup") and call_phone:
+            elif (f_info.get("requires_followup") or (call.disposition or "").lower() == "callback_requested") and call_phone:
+                from app.services.callback_time import schedule_from_transcript
                 cat_id = f_info.get("category_id")
-                cat_name = f_info.get("name")
-                action = f_info.get("action")
-                matched = f_info.get("matched_utterance")
-                f_notes = f"Category {cat_id}: {cat_name}. Action: {action}. (Matched: '{matched or 'N/A'}')"
+                cat_name = f_info.get("name") or "CLIENT REQUESTS CALL BACK LATER"
+                action = f_info.get("action") or "Schedule callback"
+                matched = f_info.get("matched_utterance") or "Callback requested during conversation"
 
+                parsed_time = schedule_from_transcript(transcript_text) if transcript_text else None
                 sched_iso = f_info.get("suggested_scheduled_at")
-                scheduled_time = None
-                if sched_iso:
+                scheduled_time = parsed_time
+
+                if not scheduled_time and sched_iso:
                     try:
                         scheduled_time = datetime.fromisoformat(sched_iso.replace("Z", "+00:00"))
                     except Exception:
-                        scheduled_time = datetime.now(UTC) + timedelta(hours=2)
+                        pass
+                if not scheduled_time:
+                    scheduled_time = datetime.now(UTC) + timedelta(hours=2)
+
+                time_note = f" for {scheduled_time.strftime('%d %b %Y, %I:%M %p')}" if parsed_time else ""
+                f_notes = f"{cat_name}: {action}{time_note}. (Matched: '{matched or 'N/A'}')"
 
                 if not followup:
                     followup = Followup(
@@ -465,13 +472,14 @@ async def persist_post_call_artifacts(session: AsyncSession, call: Call, payload
                         call_id=call.id,
                         phone_number=call_phone,
                         scheduled_at=scheduled_time,
-                        status="pending",
+                        status="scheduled",
                         notes=f_notes,
                     )
                     session.add(followup)
                 else:
                     followup.notes = f_notes
                     followup.scheduled_at = scheduled_time or followup.scheduled_at
+                    followup.status = "scheduled" 
         except Exception as e:
             logger.debug(f"Lead intelligence & followup auto-analysis notice: {e}")
 
