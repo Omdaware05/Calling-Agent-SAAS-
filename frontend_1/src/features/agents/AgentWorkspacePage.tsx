@@ -31,7 +31,9 @@ import {
   ArrowLeft,
   Eye,
   Building2,
+  Edit2,
 } from 'lucide-react';
+import { AgentFormDrawer } from './AgentFormDrawer';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 
 export const AgentWorkspacePage: React.FC = () => {
@@ -49,6 +51,7 @@ export const AgentWorkspacePage: React.FC = () => {
   const [selectedQuestionnaireId, setSelectedQuestionnaireId] = useState('');
   const [isStartingCalls, setIsStartingCalls] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
+  const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
 
   // Queries
   const { data: agent, isLoading: agentLoading } = useQuery({
@@ -257,6 +260,16 @@ export const AgentWorkspacePage: React.FC = () => {
                   </Select>
                 </div>
               )}
+
+              {/* Edit Agent Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsEditDrawerOpen(true)}
+                leftIcon={<Edit2 className="w-3.5 h-3.5 text-orange-500" />}
+              >
+                Edit Agent
+              </Button>
 
               {/* Download Dashboard PDF Button as secondary glass button */}
               <Button

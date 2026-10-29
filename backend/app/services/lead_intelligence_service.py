@@ -57,19 +57,35 @@ class LeadIntelligenceService:
         else:
             self.classifier = None
 
-    def build_transcript_text(self, call: Call) -> str:
+    def build_transcript_text(self, call: Call, segments: Optional[List[Any]] = None) -> str:
         """
         Extracts formatted multi-turn conversation text from call transcript segments.
+        Accepts explicit segments list to avoid async SQLAlchemy lazy-loading greenlet errors.
         """
-        if not call.transcript or not call.transcript.segments:
-            return ""
+        if segments:
+            lines = []
+            for seg in sorted(segments, key=lambda s: s.get("sequence", 0) if isinstance(s, dict) else (getattr(s, "sequence", 0) or 0)):
+                if isinstance(seg, dict):
+                    spk = seg.get("speaker", "")
+                    txt = seg.get("text", "")
+                else:
+                    spk = getattr(seg, "speaker", "")
+                    txt = getattr(seg, "text", "")
+                role_prefix = "Agent" if spk in ("agent", "bot", "assistant") else "Customer"
+                lines.append(f"{role_prefix}: {txt}")
+            return "\n".join(lines).strip()
 
-        lines = []
-        for seg in sorted(call.transcript.segments, key=lambda s: s.sequence if s.sequence is not None else 0):
-            role_prefix = "Agent" if seg.speaker in ("agent", "bot", "assistant") else "Customer"
-            lines.append(f"{role_prefix}: {seg.text}")
+        try:
+            if call.transcript and call.transcript.segments:
+                lines = []
+                for seg in sorted(call.transcript.segments, key=lambda s: s.sequence if s.sequence is not None else 0):
+                    role_prefix = "Agent" if seg.speaker in ("agent", "bot", "assistant") else "Customer"
+                    lines.append(f"{role_prefix}: {seg.text}")
+                return "\n".join(lines).strip()
+        except Exception:
+            pass
 
-        return "\n".join(lines).strip()
+        return ""
 
     async def analyze_with_gemini(self, transcript_text: str) -> Optional[Dict[str, Any]]:
         """
@@ -82,14 +98,15 @@ class LeadIntelligenceService:
             return None
 
         # Fast, low-latency, resilient model hierarchy
-        configured_model = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
+        configured_model = getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash")
         candidate_models = list(dict.fromkeys([
             configured_model,
-            "gemini-2.5-flash",
-            "gemini-2.5-pro",
+            "gemini-2.0-flash",
             "gemini-1.5-flash",
-            "gemini-3.1-flash-lite",
-            "gemini-3.5-flash-lite",
+            "gemini-2.5-flash",
+            "gemini-1.5-pro",
+            "gemini-2.5-pro",
+            "gemini-2.0-flash-lite",
             "gemini-flash-lite-latest",
         ]))
 
@@ -151,7 +168,12 @@ Return ONLY a valid JSON object with these exact keys:
                     )
                     if resp.status_code == 200:
                         data = resp.json()
-                        text_payload = data["candidates"][0]["content"]["parts"][0]["text"]
+                        text_payload = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                        if text_payload.startswith("```"):
+                            text_payload = text_payload.strip("`")
+                            if text_payload.startswith("json"):
+                                text_payload = text_payload[4:]
+                            text_payload = text_payload.strip()
                         import json
                         parsed = json.loads(text_payload)
                         logger.info(f"Lead intelligence successfully evaluated via Gemini ({m_clean}): status={parsed.get('status')}, confidence={parsed.get('confidence')}")
@@ -161,12 +183,25 @@ Return ONLY a valid JSON object with these exact keys:
 
         return None
 
-    async def analyze_call(self, session: AsyncSession, call: Call) -> Dict[str, Any]:
+    async def analyze_call(self, session: AsyncSession, call: Call, segments: Optional[List[Any]] = None) -> Dict[str, Any]:
         """
         Analyzes a call's full transcript using Gemini LLM (with fallback to local engine)
         and updates the call disposition, contact suppression, and Interested Leads Pipeline.
         """
-        transcript_text = self.build_transcript_text(call)
+        if not segments:
+            try:
+                seg_stmt = (
+                    select(TranscriptSegment)
+                    .join(Transcript)
+                    .where(Transcript.call_id == call.id)
+                    .order_by(TranscriptSegment.sequence.asc())
+                )
+                seg_res = await session.execute(seg_stmt)
+                segments = seg_res.scalars().all()
+            except Exception as e:
+                logger.warning(f"Could not load segments explicitly: {e}")
+
+        transcript_text = self.build_transcript_text(call, segments=segments)
 
         # Handle empty/unrecorded calls
         if not transcript_text:

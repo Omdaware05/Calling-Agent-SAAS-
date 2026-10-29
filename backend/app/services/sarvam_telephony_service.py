@@ -375,7 +375,7 @@ class SarvamTelephonyService:
             "stream": True,
         }
 
-        delimiters = {"।", "?", "!", "\n", "."}
+        delimiters = {"।", "?", "!", "\n"}
         current_chunk = []
         word_count = 0
 
@@ -399,9 +399,8 @@ class SarvamTelephonyService:
                                 word_count += delta_text.count(" ")
 
                             has_delimiter = any(d in delta_text for d in delimiters)
-                            has_pause = (word_count >= 7 and ("," in delta_text or "،" in delta_text))
 
-                            if has_delimiter or has_pause:
+                            if has_delimiter:
                                 sentence = "".join(current_chunk).strip()
                                 if sentence:
                                     yield sentence
@@ -449,7 +448,7 @@ class SarvamTelephonyService:
 
         total_len = len(mulaw_bytes)
         offset = 0
-        frame_interval = 0.075  # 75ms pacing for 80ms audio chunks ensures buffer is never starved
+        frame_interval = 0.070  # 70ms pacing for 80ms audio chunks prevents telephony underrun
 
         logger.info(f"[SarvamTelephony] Streaming {total_len} bytes to VoBiz (streamId: {stream_id})...")
         try:
@@ -661,23 +660,21 @@ class SarvamTelephonyService:
                 greeting = f"नमस्कार जी, मैं {comp_name} से {agent_name} बात कर रहा हूँ। क्या मैं आपसे दो मिनट बात कर सकता हूँ?"
 
         system_prompt = (
-            f"You are '{agent_name}', an AI Voice Calling Assistant representing '{comp_name}'.\n"
+            f"You are '{agent_name}', a helpful and polite AI Voice Calling Assistant representing '{comp_name}'.\n"
             f"Company / Purpose: {comp_desc}\n\n"
             f"INSTRUCTIONS & SCRIPT:\n{agent.instructions or agent.system_prompt or ''}\n\n"
             f"RULES FOR CONVERSATIONAL PHONE CALL:\n"
             f"1. Spoken Conversational Hindi: Respond in natural spoken Hindi in Devanagari script. Never use English script (Roman letters) or markdown.\n"
-            f"2. Strict 1-2 Short Sentences: Keep replies strictly under 15 words total. Never give long speeches.\n"
-            f"3. Ask One Question at a Time: End with exactly one short question to guide the student or customer.\n"
-            f"4. If caller says 'Hello', 'हेलो', 'हॅलो', 'कौन?': Confirm warmly ('जी, मैं {comp_name} से {agent_name} बात कर रहा हूँ') and ask your question.\n"
-            f"5. If caller answers 'हाँ' or 'हाँजी': Proceed directly with the next relevant guidance question.\n"
-            f"6. If caller declines, says no, says not interested, or asks to cut the call ('नहीं', 'कट कर दो', 'नहीं चाहिए', 'not interested'): Say ONLY 'जी ठीक है, आपका बहुत धन्यवाद! नमस्कार।' and conclude immediately. Do not ask any more questions."
+            f"2. Strict 1 Short Sentence: Keep replies strictly under 15 words total. Never give long speeches.\n"
+            f"3. PROGRESSION ONLY - NEVER REPEAT: Never repeat a question or sentence you have already said in this conversation. If customer answers or says 'हाँ'/'जी', proceed directly to the next step.\n"
+            f"4. If caller answers 'हाँ' or 'हाँजी' or 'yes': They are interested! Say: 'बहुत बढ़िया! बताइए आप किस सेवा या सहायता के बारे में जानना चाहते हैं?'\n"
+            f"5. If caller says 'ठीक है', 'okay', 'थैंक यू', 'धन्यवाद', or concludes: Say 'जी बहुत-बहुत धन्यवाद! आपका दिन शुभ हो, नमस्कार।' and do not ask any further questions.\n"
+            f"6. If caller declines, says no, says not interested, or asks to cut the call ('नहीं', 'कट कर दो', 'नहीं चाहिए', 'not interested'): Say ONLY 'जी ठीक है, आपका बहुत धन्यवाद! नमस्कार।' and conclude immediately."
         )
 
-        conversation_history: List[Dict[str, str]] = [
-            {"role": "assistant", "content": greeting}
-        ]
+        conversation_history: List[Dict[str, str]] = []
 
-        # Record greeting transcript segment in DB
+        # Ensure transcript record exists in DB
         async with AsyncSessionLocal() as session:
             stmt = select(Transcript).where(Transcript.call_id == call_id)
             res = await session.execute(stmt)
@@ -685,27 +682,16 @@ class SarvamTelephonyService:
             if not tr:
                 tr = Transcript(call_id=call_id)
                 session.add(tr)
-                await session.flush()
+                await session.commit()
 
-            seg = TranscriptSegment(
-                transcript_id=tr.id,
-                speaker="agent",
-                text=greeting,
-                start_time=0.0,
-                end_time=round(time.time() - call_start_time, 2),
-                sequence=0,
-                confidence=1.0,
-            )
-            session.add(seg)
-            await session.commit()
-
-        # Pre-synthesize opening greeting immediately so it's ready in memory
+        # Pre-synthesize opening greeting immediately so it's ready in memory for instant playback when user speaks
         logger.info(f"[SarvamTelephony] Pre-synthesizing greeting: '{greeting}'")
         greeting_mulaw = await self.synthesize_speech(greeting, voice=voice_id)
 
         # State tracking for real-time bidirectional loop
         stream_id: Optional[str] = None
-        greeting_started = False
+        greeting_delivered = False
+        greeting_started_time = 0.0
         current_turn_task: Optional[asyncio.Task] = None
         is_agent_speaking = False
         agent_finished_speaking_time = 0.0
@@ -738,7 +724,7 @@ class SarvamTelephonyService:
                 agent_finished_speaking_time = time.time()
 
         async def process_caller_turn(user_audio_bytes: bytes, t_start: float, t_end: float):
-            nonlocal sequence_counter, is_agent_speaking, agent_finished_speaking_time
+            nonlocal sequence_counter, is_agent_speaking, agent_finished_speaking_time, greeting_delivered, greeting_started_time
             t_turn_start = time.time()
             logger.info(f"[SarvamTelephony] Caller finished turn ({len(user_audio_bytes)} bytes). Transcribing...")
             user_text = await self.transcribe_audio(user_audio_bytes)
@@ -828,6 +814,35 @@ class SarvamTelephonyService:
                     pass
                 return
 
+            # If opening greeting has not been delivered yet, deliver it NOW in response to caller's first speech!
+            if not greeting_delivered:
+                greeting_delivered = True
+                greeting_started_time = time.time()
+                logger.info(f"[SarvamTelephony] First user speech detected ('{user_text}'). Playing opening greeting instantly!")
+                if greeting_mulaw:
+                    await play_audio_task(greeting_mulaw)
+
+                # Persist greeting transcript segment
+                async with AsyncSessionLocal() as session:
+                    stmt = select(Transcript).where(Transcript.call_id == call_id)
+                    tr = (await session.execute(stmt)).scalar_one_or_none()
+                    if tr:
+                        session.add(
+                            TranscriptSegment(
+                                transcript_id=tr.id,
+                                speaker="agent",
+                                text=greeting,
+                                start_time=round(greeting_started_time - call_start_time, 2),
+                                end_time=round(time.time() - call_start_time, 2),
+                                sequence=sequence_counter,
+                                confidence=1.0,
+                            )
+                        )
+                        await session.commit()
+                sequence_counter += 1
+                conversation_history.append({"role": "assistant", "content": greeting})
+                return
+
             # Stream-and-synthesize pipeline:
             full_reply_chunks = []
             first_audio_dispatched = False
@@ -872,10 +887,12 @@ class SarvamTelephonyService:
             sequence_counter += 1
 
             # Check if agent concluded call
-            if any(w in full_reply for w in ["धन्यवाद", "अलविदा", "नमस्कार", "bye"]):
-                if any(w in user_text for w in ["नहीं", "bye", "रखो", "काटो", "नो", "no", "ना"]):
-                    logger.info("[SarvamTelephony] Natural conversational wrap-up concluded.")
-                    await asyncio.sleep(1.2)
+            closing_phrases = ["धन्यवाद", "अलविदा", "नमस्कार", "शुभ हो", "bye"]
+            if any(w in full_reply for w in closing_phrases):
+                user_is_closing = any(w in user_text.lower() for w in ["ठीक", "अच्छा", "ok", "okay", "नहीं", "bye", "रखो", "काटो", "नो", "no", "ना", "धन्यवाद", "थैंक यू"])
+                if user_is_closing or "शुभ हो" in full_reply or "समय देने के लिए" in full_reply:
+                    logger.info("[SarvamTelephony] Natural conversational wrap-up concluded. Hanging up carrier call.")
+                    await asyncio.sleep(1.0)
                     try:
                         from app.services.telephony_service import telephony_service
                         uuid_to_hangup = carrier_call_uuid or stream_id
@@ -891,6 +908,7 @@ class SarvamTelephonyService:
                         await websocket.close()
                     except Exception:
                         pass
+                    return
 
         try:
             while True:
@@ -907,23 +925,39 @@ class SarvamTelephonyService:
                         or msg.get("streamId")
                         or call_id
                     )
-                    logger.info(f"[SarvamTelephony] VoBiz start event received. Captured streamId: {stream_id}")
-
-                    if not greeting_started and greeting_mulaw:
-                        greeting_started = True
-                        logger.info(f"[SarvamTelephony] Firing instant opening greeting to streamId: {stream_id}")
-                        current_turn_task = asyncio.create_task(play_audio_task(greeting_mulaw))
+                    logger.info(f"[SarvamTelephony] VoBiz start event received. Captured streamId: {stream_id}. Waiting for caller speech before greeting...")
 
                 elif event == "media":
+                    now = time.time()
                     # Capture streamId if not captured yet
                     if not stream_id:
                         stream_id = msg.get("streamId") or msg.get("media", {}).get("streamId") or call_id
 
-                    # If greeting has not started yet (e.g. start event was omitted), start it now
-                    if not greeting_started and greeting_mulaw:
-                        greeting_started = True
-                        logger.info(f"[SarvamTelephony] Firing greeting on first media chunk for streamId: {stream_id}")
-                        current_turn_task = asyncio.create_task(play_audio_task(greeting_mulaw))
+                    # Fallback watchdog: if caller stays silent for 5.0 seconds after connect, gently initiate greeting
+                    if not greeting_delivered and not is_agent_speaking and not is_user_speaking:
+                        if (now - call_start_time) > 5.0 and len(audio_buffer) == 0:
+                            logger.info(f"[SarvamTelephony] Caller silent after connect (5.0s). Delivering opening greeting to streamId: {stream_id}")
+                            greeting_delivered = True
+                            greeting_started_time = now
+                            current_turn_task = asyncio.create_task(play_audio_task(greeting_mulaw))
+                            conversation_history.append({"role": "assistant", "content": greeting})
+                            async with AsyncSessionLocal() as session:
+                                stmt = select(Transcript).where(Transcript.call_id == call_id)
+                                tr = (await session.execute(stmt)).scalar_one_or_none()
+                                if tr:
+                                    session.add(
+                                        TranscriptSegment(
+                                            transcript_id=tr.id,
+                                            speaker="agent",
+                                            text=greeting,
+                                            start_time=round(now - call_start_time, 2),
+                                            end_time=round(now + 3.0 - call_start_time, 2),
+                                            sequence=sequence_counter,
+                                            confidence=1.0,
+                                        )
+                                    )
+                                    await session.commit()
+                            sequence_counter += 1
 
                     media_payload = msg.get("media", {}).get("payload", "")
                     if not media_payload:
@@ -932,7 +966,6 @@ class SarvamTelephonyService:
                     chunk = base64.b64decode(media_payload)
                     pcm_chunk = audioop.ulaw2lin(chunk, 2)
                     rms = audioop.rms(pcm_chunk, 2)
-                    now = time.time()
                     recorded_timeline.append((now - call_start_time, "customer", chunk))
 
                     # 1. Caller Barge-In: If agent is speaking and caller speaks naturally (RMS > 550), interrupt immediately
@@ -1102,7 +1135,7 @@ class SarvamTelephonyService:
                             for s in seg_res.scalars().all()
                         ]
 
-                        intel = await lead_intelligence_service.analyze_call(session, call)
+                        intel = await lead_intelligence_service.analyze_call(session, call, segments=segs)
 
                         data_exporter.export_call_transcript(
                             call_id=call_id,

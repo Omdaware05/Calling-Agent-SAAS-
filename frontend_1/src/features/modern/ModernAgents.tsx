@@ -1,7 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus, ArrowUpRight, Languages, Cpu, Users } from 'lucide-react';
+import { Plus, ArrowUpRight, Languages, Cpu, Users, Edit2 } from 'lucide-react';
+import { AgentFormDrawer } from '../agents/AgentFormDrawer';
+import type { AgentDocument } from '../../types/api';
 import { clsx } from 'clsx';
 import { agentsApi } from '../../services/api/agents';
 import { callsApi } from '../../services/api/calls';
@@ -11,6 +13,8 @@ import { MCard, MPageHeader, Avatar, Pill, primaryPill } from './ui';
 export const ModernAgents: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<AgentDocument | null>(null);
 
   const { data: agents = [], isLoading } = useQuery({ queryKey: ['agents'], queryFn: () => agentsApi.getAgents(50) });
   const { data: calls = [] } = useQuery<CallDocument[]>({
@@ -35,7 +39,14 @@ export const ModernAgents: React.FC = () => {
         title="AI Agents"
         subtitle="Your voice agents — what they do, which business they serve, and how much they call."
         actions={
-          <button type="button" className={primaryPill} onClick={() => navigate('/agents')}>
+          <button
+            type="button"
+            className={primaryPill}
+            onClick={() => {
+              setEditingAgent(null);
+              setIsFormOpen(true);
+            }}
+          >
             <Plus className="w-4 h-4" /> New Agent
           </button>
         }
@@ -101,18 +112,39 @@ export const ModernAgents: React.FC = () => {
                   <span className="text-xs text-[#98A2B3] font-medium"> calls made</span>
                 </div>
                 <Pill tone={agent.is_enabled ? 'emerald' : 'slate'}>{agent.is_enabled ? 'Active' : 'Paused'}</Pill>
-                <button
-                  type="button"
-                  onClick={() => navigate(`/agents/${agent.agent_id}`)}
-                  className="inline-flex items-center gap-1 text-[13px] font-semibold text-orange-600 hover:text-orange-500"
-                >
-                  Open <ArrowUpRight className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingAgent(agent);
+                      setIsFormOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#475467] hover:text-[#101828] px-2.5 py-1 rounded-lg hover:bg-[#F2F4F7] transition-colors"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" /> Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/agents/${agent.agent_id}`)}
+                    className="inline-flex items-center gap-1 text-[13px] font-semibold text-orange-600 hover:text-orange-500"
+                  >
+                    Open <ArrowUpRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           </MCard>
         ))}
       </div>
+
+      <AgentFormDrawer
+        isOpen={isFormOpen}
+        onClose={() => setIsFormOpen(false)}
+        agent={editingAgent}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['agents'] });
+        }}
+      />
     </div>
   );
 };

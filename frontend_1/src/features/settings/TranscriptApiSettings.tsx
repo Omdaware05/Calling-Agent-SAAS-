@@ -34,7 +34,7 @@ export const TranscriptApiSettings: React.FC = () => {
 
   // Local Form State
   const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState('gemini-2.5-flash');
+  const [model, setModel] = useState('gemini-2.0-flash');
   const [customModel, setCustomModel] = useState('');
   const [isCustomModel, setIsCustomModel] = useState(false);
   const [showKey, setShowKey] = useState(false);
@@ -63,7 +63,7 @@ export const TranscriptApiSettings: React.FC = () => {
         setModel('custom');
       } else {
         setIsCustomModel(false);
-        setModel(config.model || 'gemini-2.5-flash');
+        setModel(config.model || 'gemini-2.0-flash');
       }
     }
   }, [config]);
@@ -247,10 +247,11 @@ export const TranscriptApiSettings: React.FC = () => {
                   className="bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800"
                 >
                   {(config?.available_models || [
-                    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Ultra-Fast & Recommended)' },
-                    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Deep Reasoning & Complex Nuances)' },
+                    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Fast & Recommended)' },
                     { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Standard Fast)' },
-                    { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite' },
+                    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Ultra-Fast)' },
+                    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (High Accuracy)' },
+                    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Deep Reasoning & Complex Nuances)' },
                   ]).map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.name}

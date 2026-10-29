@@ -80,9 +80,9 @@ export const AgentFormDrawer: React.FC<AgentFormDrawerProps> = ({
   const [showAuthToken, setShowAuthToken] = useState<boolean>(false);
 
   // Voice States
-  const [ttsProvider, setTtsProvider] = useState<string>('dograh');
-  const [voiceId, setVoiceId] = useState<string>('hm_omega');
-  const [voiceName, setVoiceName] = useState<string>('Omega - Clear Hindi Male (Kokoro)');
+  const [ttsProvider, setTtsProvider] = useState<string>('sarvam');
+  const [voiceId, setVoiceId] = useState<string>('shubh');
+  const [voiceName, setVoiceName] = useState<string>('Shubh - Northern Conversational');
   const [voiceGender, setVoiceGender] = useState<string>('male');
   const [speakingSpeed, setSpeakingSpeed] = useState<number>(1.0);
   const [voiceStyle, setVoiceStyle] = useState<string>(
@@ -139,16 +139,16 @@ export const AgentFormDrawer: React.FC<AgentFormDrawerProps> = ({
   useEffect(() => {
     if (agent) {
       setName(agent.name || '');
-      setDescription(agent.description || '');
+      setDescription(agent.description || agent.purpose || '');
       setCompanyName(agent.company_name || 'ARB SoftTech');
-      setCompanyDescription(agent.company_description || agent.description || 'Leading provider of AI voice calling and customer engagement automation.');
+      setCompanyDescription(agent.company_description || agent.purpose || agent.description || 'Leading provider of AI voice calling and customer engagement automation.');
       setGreetingMessage(agent.greeting_message || '');
       setIsEnabled(agent.is_enabled ?? true);
       setDefaultLanguage(agent.default_language || 'Hindi');
       setSupportedLanguages(
         agent.supported_languages || ['Hindi', 'English', 'Hinglish']
       );
-      setSystemPrompt(agent.system_prompt || '');
+      setSystemPrompt(agent.system_prompt || agent.instructions || '');
       setConcurrency(agent.concurrency || 2);
       setProvider(agent.provider || 'vobiz');
       setQuestionnaireId(agent.questionnaire_id || '');
@@ -394,7 +394,7 @@ export const AgentFormDrawer: React.FC<AgentFormDrawerProps> = ({
       telephony_provider: telephonyProvider,
       telephony_from_number: telephonyFromNumber.trim() || undefined,
       telephony_auth_id: telephonyAuthId.trim() || undefined,
-      telephony_auth_token: telephonyAuthToken.trim() || undefined,
+      telephony_auth_token: telephonyAuthToken && !telephonyAuthToken.includes('•') ? telephonyAuthToken.trim() : undefined,
     };
 
     try {

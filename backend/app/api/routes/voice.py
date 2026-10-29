@@ -273,10 +273,12 @@ async def get_transcript_api_config():
         "model": model,
         "is_configured": bool(key and len(key) > 8),
         "available_models": [
-            {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash (Ultra-Fast & Recommended)", "latency": "Ultra-Low"},
-            {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro (Deep Reasoning & Complex Nuances)", "latency": "Low-Medium"},
+            {"id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash (Fast & Recommended)", "latency": "Ultra-Low"},
             {"id": "gemini-1.5-flash", "name": "Gemini 1.5 Flash (Standard Fast)", "latency": "Low"},
-            {"id": "gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash Lite", "latency": "Ultra-Low"},
+            {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash (Ultra-Fast)", "latency": "Ultra-Low"},
+            {"id": "gemini-1.5-pro", "name": "Gemini 1.5 Pro (High Accuracy)", "latency": "Medium"},
+            {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro (Deep Reasoning & Complex Nuances)", "latency": "Low-Medium"},
+            {"id": "gemini-2.0-flash-lite", "name": "Gemini 2.0 Flash Lite", "latency": "Ultra-Low"},
         ],
         "stt_engine": getattr(settings, "SARVAM_STT_MODEL", "saaras:v3"),
     }

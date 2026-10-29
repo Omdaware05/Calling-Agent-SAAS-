@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, PhoneCall, Target, CalendarClock, CalendarDays } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, PhoneCall, Target, CalendarClock, CalendarDays, ExternalLink } from 'lucide-react';
 import { calendarApi } from '../../services/api/calendar';
 import { agentsApi } from '../../services/api/agents';
 import { MCard, MPageHeader, Pill, callStateMeta, leadStatusMeta, fmtDuration, scorePct } from './ui';
@@ -9,30 +10,43 @@ import { clsx } from 'clsx';
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function isoOf(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function timeOf(iso?: string | null): string {
   if (!iso) return '';
-  return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  try {
+    const clean = iso.endsWith('Z') || iso.includes('+') ? iso : `${iso}Z`;
+    const d = new Date(clean);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  } catch {
+    return '';
+  }
 }
 
 export const ModernCalendar: React.FC = () => {
+  const navigate = useNavigate();
   const today = useMemo(() => new Date(), []);
   const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
-  const [selected, setSelected] = useState<string>(isoOf(today));
+  const [selected, setSelected] = useState<string>(() => isoOf(today));
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth() + 1;
 
-  const { data: summary } = useQuery({
+  const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: ['calendar-summary', year, month],
     queryFn: () => calendarApi.getSummary(year, month),
   });
+
   const { data: day, isLoading: dayLoading } = useQuery({
     queryKey: ['calendar-day', selected],
     queryFn: () => calendarApi.getDay(selected),
   });
+
   const { data: agents = [] } = useQuery({ queryKey: ['agents'], queryFn: () => agentsApi.getAgents(50) });
   const agentName = useMemo(() => new Map(agents.map((a) => [a.agent_id, a.name])), [agents]);
 
@@ -44,18 +58,38 @@ export const ModernCalendar: React.FC = () => {
     return Array.from({ length: 42 }, (_, i) => {
       const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
       const iso = isoOf(d);
-      return { date: d, iso, inMonth: d.getMonth() === month - 1, counts: summary?.days[iso] };
+      const counts = summary?.days ? summary.days[iso] : undefined;
+      return { date: d, iso, inMonth: d.getMonth() === month - 1, counts };
     });
-  }, [cursor, summary]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cursor, summary, year, month]);
 
-  const moveMonth = (delta: number) => setCursor(new Date(year, month - 1 + delta, 1));
+  const moveMonth = (delta: number) => {
+    const next = new Date(year, month - 1 + delta, 1);
+    setCursor(next);
+    setSelected(isoOf(next));
+  };
+
   const monthLabel = cursor.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-  const selectedLabel = new Date(selected + 'T00:00:00').toLocaleDateString('en-IN', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+
+  const selectedLabel = useMemo(() => {
+    try {
+      const parts = selected.split('-');
+      if (parts.length === 3) {
+        const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        return d.toLocaleDateString('en-IN', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+        });
+      }
+    } catch {}
+    return selected;
+  }, [selected]);
+
+  const calls = day?.calls || [];
+  const leads = day?.leads || [];
+  const followups = day?.followups || [];
 
   return (
     <div>
@@ -95,11 +129,16 @@ export const ModernCalendar: React.FC = () => {
       />
 
       <MCard className="overflow-hidden mb-6">
-        <div className="px-6 pt-5 pb-4 flex items-center gap-2.5">
-          <span className="w-9 h-9 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center">
-            <CalendarDays className="w-[18px] h-[18px] text-orange-600" strokeWidth={1.9} />
-          </span>
-          <h3 className="text-[17px] font-extrabold tracking-tight text-[#101828]">{monthLabel}</h3>
+        <div className="px-6 pt-5 pb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="w-9 h-9 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center">
+              <CalendarDays className="w-[18px] h-[18px] text-orange-600" strokeWidth={1.9} />
+            </span>
+            <h3 className="text-[17px] font-extrabold tracking-tight text-[#101828]">{monthLabel}</h3>
+          </div>
+          {summaryLoading && (
+            <span className="text-xs text-[#98A2B3]">Loading monthly activity…</span>
+          )}
         </div>
         <div className="grid grid-cols-7 border-t border-[#F1F2F4]">
           {WEEKDAYS.map((w) => (
@@ -115,7 +154,12 @@ export const ModernCalendar: React.FC = () => {
               <button
                 key={cell.iso}
                 type="button"
-                onClick={() => setSelected(cell.iso)}
+                onClick={() => {
+                  setSelected(cell.iso);
+                  if (!cell.inMonth) {
+                    setCursor(new Date(cell.date.getFullYear(), cell.date.getMonth(), 1));
+                  }
+                }}
                 className={clsx(
                   'h-[104px] p-2.5 text-left align-top border-b border-r border-[#F5F6F7] transition-colors [&:nth-child(7n)]:border-r-0',
                   cell.inMonth ? 'bg-white hover:bg-[#FAFAFB]' : 'bg-[#FBFBFC]',
@@ -160,20 +204,35 @@ export const ModernCalendar: React.FC = () => {
       </MCard>
 
       <h3 className="text-[16px] font-extrabold tracking-tight text-[#101828] mb-3">{selectedLabel}</h3>
-      {dayLoading && <MCard className="p-8 text-center text-sm text-[#98A2B3]">Loading the day…</MCard>}
-      {!dayLoading && day && (
+      {dayLoading && <MCard className="p-8 text-center text-sm text-[#98A2B3]">Loading date activity…</MCard>}
+      {!dayLoading && (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <MCard className="p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <PhoneCall className="w-4 h-4 text-orange-600" />
-              <h4 className="text-sm font-bold text-[#101828]">Calls ({day.calls.length})</h4>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <PhoneCall className="w-4 h-4 text-orange-600" />
+                <h4 className="text-sm font-bold text-[#101828]">Calls ({calls.length})</h4>
+              </div>
+              {calls.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/calls')}
+                  className="text-[11px] font-semibold text-orange-600 hover:text-orange-500 flex items-center gap-0.5"
+                >
+                  All Calls <ExternalLink className="w-3 h-3" />
+                </button>
+              )}
             </div>
             <div className="space-y-3">
-              {day.calls.length === 0 && <p className="text-[13px] text-[#98A2B3]">No calls on this date.</p>}
-              {day.calls.slice(0, 8).map((c) => {
+              {calls.length === 0 && <p className="text-[13px] text-[#98A2B3]">No calls on this date.</p>}
+              {calls.slice(0, 10).map((c) => {
                 const meta = callStateMeta(c.state);
                 return (
-                  <div key={c.call_id} className="flex items-center gap-2.5">
+                  <div
+                    key={c.call_id}
+                    onClick={() => navigate('/calls')}
+                    className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-[#F9FAFB] cursor-pointer transition-colors"
+                  >
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-bold text-[#101828] tabular-nums truncate">{c.phone_number}</p>
                       <p className="text-[11px] text-[#98A2B3] truncate">
@@ -184,23 +243,40 @@ export const ModernCalendar: React.FC = () => {
                   </div>
                 );
               })}
-              {day.calls.length > 8 && <p className="text-[11px] text-[#98A2B3]">+ {day.calls.length - 8} more calls</p>}
+              {calls.length > 10 && (
+                <p className="text-[11px] text-[#98A2B3] pt-1 text-center">+ {calls.length - 10} more calls in history</p>
+              )}
             </div>
           </MCard>
 
           <MCard className="p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <Target className="w-4 h-4 text-emerald-600" />
-              <h4 className="text-sm font-bold text-[#101828]">Leads ({day.leads.length})</h4>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Target className="w-4 h-4 text-emerald-600" />
+                <h4 className="text-sm font-bold text-[#101828]">Leads ({leads.length})</h4>
+              </div>
+              {leads.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/leads')}
+                  className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-500 flex items-center gap-0.5"
+                >
+                  All Leads <ExternalLink className="w-3 h-3" />
+                </button>
+              )}
             </div>
             <div className="space-y-3">
-              {day.leads.length === 0 && <p className="text-[13px] text-[#98A2B3]">No leads captured on this date.</p>}
-              {day.leads.slice(0, 8).map((l) => {
+              {leads.length === 0 && <p className="text-[13px] text-[#98A2B3]">No leads captured on this date.</p>}
+              {leads.slice(0, 10).map((l) => {
                 const meta = leadStatusMeta(l.status || 'new');
                 return (
-                  <div key={l.lead_id} className="flex items-center gap-2.5">
+                  <div
+                    key={l.lead_id}
+                    onClick={() => navigate('/leads')}
+                    className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-[#F9FAFB] cursor-pointer transition-colors"
+                  >
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-bold text-[#101828] truncate">{l.name || 'Unknown caller'}</p>
+                      <p className="text-[13px] font-bold text-[#101828] truncate">{l.name || 'Interested caller'}</p>
                       <p className="text-[11px] text-[#98A2B3] tabular-nums truncate">
                         {l.phone_number} · score {Math.round(scorePct(l.score))}
                       </p>
@@ -209,19 +285,36 @@ export const ModernCalendar: React.FC = () => {
                   </div>
                 );
               })}
-              {day.leads.length > 8 && <p className="text-[11px] text-[#98A2B3]">+ {day.leads.length - 8} more leads</p>}
+              {leads.length > 10 && (
+                <p className="text-[11px] text-[#98A2B3] pt-1 text-center">+ {leads.length - 10} more leads captured</p>
+              )}
             </div>
           </MCard>
 
           <MCard className="p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <CalendarClock className="w-4 h-4 text-violet-600" />
-              <h4 className="text-sm font-bold text-[#101828]">Follow-ups due ({day.followups.length})</h4>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="w-4 h-4 text-violet-600" />
+                <h4 className="text-sm font-bold text-[#101828]">Follow-ups due ({followups.length})</h4>
+              </div>
+              {followups.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/followups')}
+                  className="text-[11px] font-semibold text-violet-600 hover:text-violet-500 flex items-center gap-0.5"
+                >
+                  All Follow-ups <ExternalLink className="w-3 h-3" />
+                </button>
+              )}
             </div>
             <div className="space-y-3">
-              {day.followups.length === 0 && <p className="text-[13px] text-[#98A2B3]">No follow-ups due on this date.</p>}
-              {day.followups.slice(0, 8).map((f) => (
-                <div key={f.followup_id} className="flex items-center gap-2.5">
+              {followups.length === 0 && <p className="text-[13px] text-[#98A2B3]">No follow-ups due on this date.</p>}
+              {followups.slice(0, 10).map((f) => (
+                <div
+                  key={f.followup_id}
+                  onClick={() => navigate('/followups')}
+                  className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-[#F9FAFB] cursor-pointer transition-colors"
+                >
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-bold text-[#101828] tabular-nums truncate">{f.phone_number}</p>
                     <p className="text-[11px] text-[#98A2B3] truncate">
@@ -233,7 +326,9 @@ export const ModernCalendar: React.FC = () => {
                   </Pill>
                 </div>
               ))}
-              {day.followups.length > 8 && <p className="text-[11px] text-[#98A2B3]">+ {day.followups.length - 8} more follow-ups</p>}
+              {followups.length > 10 && (
+                <p className="text-[11px] text-[#98A2B3] pt-1 text-center">+ {followups.length - 10} more follow-ups scheduled</p>
+              )}
             </div>
           </MCard>
         </div>
