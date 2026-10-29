@@ -818,6 +818,7 @@ class SarvamTelephonyService:
             "quantity": None,
             "variety": None,
         }
+        dialogue_step = 0
 
         recorded_timeline: List[tuple] = []
 
@@ -1061,23 +1062,42 @@ class SarvamTelephonyService:
                 conversation_history.append({"role": "assistant", "content": greeting})
                 return
 
-            # 4. Generate next turn with Context Memory & Direct Q&A
+            # 4. Generate next turn via Structured Dialogue Engine & Context Memory
             agent_speech_start = time.time()
             prev_agent_texts = [m["content"] for m in conversation_history if m.get("role") == "assistant"]
+            is_agri_agent = (getattr(agent, "id", "") == "agent-samruddhi-agritech") or ("samruddhi" in (getattr(agent, "name", "")).lower())
 
-            # Direct Q&A handlers: Answer customer questions directly instead of ignoring them!
             direct_reply = None
-            if any(q in user_text for q in ["कोणता प्रकार", "कोणती व्हरायटी", "रिकमेंड", "चांगला आहे", "कोणता चांगला"]):
+            should_terminate_after_reply = False
+            t_clean = user_text.lower().strip("।,?!. ")
+
+            # Handle Hello / Audio Check without repeating previous statements
+            if t_clean in ["हेलो", "हॅलो", "hello", "आवाज येतोय का", "ऐकू येतंय का"]:
                 if "mr" in lang_code:
-                    direct_reply = "उत्पादनासाठी गव्हामध्ये लोकवन आणि हरभऱ्यामध्ये दिग्विजय ही व्हरायटी सर्वोत्तम आहे! आपण किती एकरासाठी नियोजन करत आहात?"
+                    if dialogue_step <= 1:
+                        direct_reply = "हो, ऐकू येतंय! आपण बियाणे आता खरेदी करू इच्छिता की नंतर?"
+                    elif dialogue_step == 2:
+                        direct_reply = "हो, आवाज येतोय! आपण किती एकर जमिनीवर पेरणी करणार आहात?"
+                    elif dialogue_step == 3:
+                        direct_reply = "हो, ऐकू येतंय! आपल्याला साधारण किती किलो बियाणे हवे आहे किंवा दर जाणून घ्यायचे आहेत का?"
+                    else:
+                        direct_reply = "हो, ऐकू येतंय! अधिक माहिती आणि बुकिंगसाठी आमच्या प्रतिनिधीकडून कॉल हवा आहे का?"
+                else:
+                    direct_reply = "जी, आवाज़ आ रही है! बताएं मैं आपकी क्या सहायता कर सकता हूँ?"
+
+            # Direct Farmer Q&A: Always answer farmer questions directly with verified facts
+            elif any(q in user_text for q in ["कोणता प्रकार", "कोणती व्हरायटी", "रिकमेंड", "चांगला आहे", "कोणता चांगला", "कोणता ठीक"]):
+                if "mr" in lang_code:
+                    followup = " आपण किती एकर जमिनीवर पेरणी करणार आहात?" if not context_state["acreage"] else " आपण किती किलो बियाणे घेणार आहात?"
+                    direct_reply = "उत्पादनासाठी गव्हामध्ये लोकवन आणि हरभऱ्यामध्ये दिग्विजय ही व्हरायटी सर्वोत्तम आहे!" + followup
                 else:
                     direct_reply = "उपज के लिए गेहूँ में लोकवन और चने में दिग्विजय सबसे उत्तम किस्म है! आप कितने एकड़ के लिए सोच रहे हैं?"
 
-            elif any(q in user_text for q in ["दर काय", "भाव काय", "किंमत काय", "काय भाव", "का भाव", "रेट काय"]):
+            elif any(q in user_text for q in ["दर काय", "भाव काय", "किंमत काय", "काय भाव", "का भाव", "रेट काय", "किंमत"]):
                 if "mr" in lang_code:
-                    direct_reply = "प्रमाणित लोकवन गहू ४२ रुपये किलो आणि हरभरा ७८ रुपये किलो आहे. आपण किती किलो बियाणे घेणार आहात?"
+                    direct_reply = "प्रमाणित लोकवन गहू ४२ रुपये किलो आणि हरभरा ७८ रुपये किलो आहे. बुकिंगसाठी आमच्या टीमने आपल्याला कॉल करावा का?"
                 else:
-                    direct_reply = "प्रमाणित लोकवन गेहूँ ४२ रुपये किलो और चना ७८ रुपये किलो है। आपको लगभग कितने किलो बीज चाहिए?"
+                    direct_reply = "प्रमाणित लोकवन गेहूँ ४२ रुपये किलो और चना ७८ रुपये किलो है। क्या बुकिंग के लिए हमारी टीम आपको कॉल करे?"
 
             elif "लोकवन" in user_text and any(q in user_text for q in ["माहिती", "सांगा", "बद्दल", "फायदे"]):
                 if "mr" in lang_code:
@@ -1091,11 +1111,30 @@ class SarvamTelephonyService:
                 else:
                     direct_reply = "शरबती गेहूँ खाने में स्वादिष्ट और मुलायम रोटियों के लिए जाना जाता है, मंडी में बढ़िया भाव मिलता है!"
 
+            # Deterministic Turn Progression for Samruddhi Agritech Agent
+            elif is_agri_agent and "mr" in lang_code:
+                if dialogue_step == 0:
+                    dialogue_step = 1
+                    direct_reply = "खूप छान! आपण बियाणे आता खरेदी करू इच्छिता की नंतर?"
+                elif dialogue_step == 1:
+                    dialogue_step = 2
+                    direct_reply = "काही हरकत नाही! आपण किती एकर जमिनीवर पेरणी करण्याचे ठरवले आहे?"
+                elif dialogue_step == 2:
+                    dialogue_step = 3
+                    prefix = f"{context_state['acreage']} साठी खूप छान! " if context_state['acreage'] else "काही हरकत नाही! "
+                    direct_reply = f"{prefix}साधारण किती किलो बियाणे हवे आहे किंवा दर जाणून घ्यायचे आहेत का?"
+                elif dialogue_step == 3:
+                    dialogue_step = 4
+                    direct_reply = "आमच्याकडे लोकवन गहू ४२ रुपये किलो आणि दिग्विजय हरभरा ७८ रुपये किलो आहे. बुकिंगसाठी आमच्या प्रतिनिधीकडून कॉल हवा आहे का?"
+                elif dialogue_step >= 4:
+                    dialogue_step = 5
+                    direct_reply = "नक्कीच! समृद्धी ॲग्रीटेक मध्ये संपर्क केल्याबद्दल खूप धन्यवाद, आपला दिवस शुभ जावो, नमस्कार!"
+                    should_terminate_after_reply = True
+
             if direct_reply:
                 full_reply = direct_reply
-                logger.info(f"[SarvamTelephony] Direct Q&A matched: '{full_reply}'")
+                logger.info(f"[SarvamTelephony] Dialogue Engine resolved: step={dialogue_step}, reply='{full_reply}'")
             else:
-                # Inject saved context into dynamic prompt so LLM remembers known facts
                 dynamic_system_prompt = system_prompt
                 ctx_parts = []
                 if context_state["crop"]:
@@ -1114,15 +1153,15 @@ class SarvamTelephonyService:
 
                 full_reply = await self.generate_llm_response(conversation_history, dynamic_system_prompt)
 
-            # Strict Anti-Repetition Guard: If acreage is already known, never ask for acreage again
+            # Extra Safety: If acreage is known, never ask for acreage again
             if context_state["acreage"] and any(w in full_reply for w in ["किती एकर", "कितने एकड़"]):
-                logger.info(f"[SarvamTelephony] Acreage {context_state['acreage']} already known. Suppressing duplicate acreage question.")
+                logger.info(f"[SarvamTelephony] Acreage {context_state['acreage']} already known. Suppressing duplicate question.")
                 if "mr" in lang_code:
                     full_reply = f"{context_state['acreage']} साठी खूप छान! साधारण किती किलो बियाणे हवे आहे किंवा दर जाणून घ्यायचे आहेत का?"
                 else:
                     full_reply = f"{context_state['acreage']} के लिए बहुत बढ़िया! लगभग कितने किलो बीज चाहिए या भाव जानना चाहेंगे?"
 
-            # General duplicate reply check
+            # Extra Safety: Exact duplicate reply suppression
             if any(full_reply.strip("।,?!. ") == prev.strip("।,?!. ") for prev in prev_agent_texts[-3:]):
                 logger.info(f"[SarvamTelephony] Exact repeat detected in '{full_reply}'. Progressing turn.")
                 if "mr" in lang_code:
