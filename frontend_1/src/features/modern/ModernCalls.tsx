@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { PhoneOutgoing, ChevronRight } from 'lucide-react';
+import { PhoneOutgoing, ChevronRight, PhoneCall, Radio, PhoneMissed } from 'lucide-react';
 import { clsx } from 'clsx';
 import { callsApi } from '../../services/api/calls';
 import { agentsApi } from '../../services/api/agents';
 import { statsApi } from '../../services/api/stats';
 import type { CallDocument } from '../../types/api';
-import { MCard, MPageHeader, Avatar, Pill, callStateMeta, fmtDuration, timeAgo } from './ui';
+import { MCard, MStatCard, MPageHeader, Pill, callStateMeta, fmtDuration, timeAgo } from './ui';
 
 const FILTERS = [
   { id: 'all', label: 'All Calls' },
@@ -43,28 +43,23 @@ export const ModernCalls: React.FC = () => {
   }, [calls, filter]);
 
   const statCards = [
-    { label: 'Total calls', value: stats?.total_calls ?? calls.length },
-    { label: 'Live now', value: stats?.active ?? 0 },
-    { label: 'Completed', value: stats?.completed ?? 0 },
-    { label: 'Failed', value: stats?.failed ?? 0 },
+    { label: 'Total Calls', value: (stats?.total_calls ?? calls.length).toLocaleString('en-IN'), icon: PhoneCall, iconClass: 'bg-[#FFF1E6] text-[#EA580C]', subtext: 'across all agents' },
+    { label: 'Live Now', value: (stats?.active ?? 0).toLocaleString('en-IN'), icon: Radio, iconClass: 'bg-[#E7F8EE] text-[#16A34A]', subtext: 'calls in progress' },
+    { label: 'Completed', value: (stats?.completed ?? 0).toLocaleString('en-IN'), icon: PhoneOutgoing, iconClass: 'bg-[#E6F4FE] text-[#0284C7]', subtext: stats?.total_calls ? `${Math.round(((stats?.completed ?? 0) / stats.total_calls) * 100)}% of all calls` : '' },
+    { label: 'Failed', value: (stats?.failed ?? 0).toLocaleString('en-IN'), icon: PhoneMissed, iconClass: 'bg-[#FDECEC] text-[#DC2626]', subtext: 'could not connect' },
   ];
 
   return (
     <div>
       <MPageHeader title="Calls" subtitle="Every conversation your AI agents have had — newest first." />
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-5 mb-5">
-        {statCards.map((s, i) => (
-          <MCard key={s.label} className="px-5 py-4">
-            <div className="anim-enter" style={{ animationDelay: `${i * 60}ms` }}>
-              <p className="text-[24px] leading-none font-bold text-[#101828] tabular-nums">{s.value.toLocaleString('en-IN')}</p>
-              <p className="text-xs text-[#98A2B3] font-medium mt-1.5">{s.label}</p>
-            </div>
-          </MCard>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-6">
+        {statCards.map((st, i) => (
+          <MStatCard key={st.label} {...st} delay={i * 60} />
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-1.5 mb-5">
+      <div className="flex flex-wrap gap-1.5 mb-6">
         {FILTERS.map((f) => (
           <button
             key={f.id}

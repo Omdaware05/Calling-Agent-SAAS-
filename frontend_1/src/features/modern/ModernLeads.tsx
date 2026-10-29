@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Download, MapPin, Wallet, PhoneForwarded } from 'lucide-react';
+import { Search, Download, MapPin, Wallet, PhoneForwarded, Users, Heart, BadgeCheck, PhoneOff } from 'lucide-react';
 import { clsx } from 'clsx';
 import { leadsApi } from '../../services/api/leads';
 import type { LeadDocument } from '../../types/api';
-import { MCard, MPageHeader, Avatar, Pill, ScoreBar, scorePct, leadStatusMeta, timeAgo, whitePill } from './ui';
+import { MCard, MStatCard, MPageHeader, Avatar, Pill, ScoreBar, scorePct, leadStatusMeta, timeAgo, whitePill } from './ui';
 
 const FILTERS = [
   { id: 'all', label: 'All Leads' },
@@ -44,10 +44,10 @@ export const ModernLeads: React.FC = () => {
   }, [leads, filter, query]);
 
   const stats = [
-    { label: 'Total leads', value: leads.length, color: 'text-[#101828]' },
-    { label: 'Interested', value: counts.get('interested') || 0, color: 'text-emerald-600' },
-    { label: 'Qualified', value: counts.get('qualified') || 0, color: 'text-violet-600' },
-    { label: 'Not interested', value: counts.get('not_interested') || 0, color: 'text-rose-600' },
+    { label: 'Total Leads', value: leads.length.toLocaleString('en-IN'), icon: Users, iconClass: 'bg-[#F2F4F7] text-[#344054]', subtext: 'captured by AI callers' },
+    { label: 'Interested', value: (counts.get('interested') || 0).toLocaleString('en-IN'), icon: Heart, iconClass: 'bg-[#E7F8EE] text-[#16A34A]', subtext: leads.length ? `${Math.round(((counts.get('interested') || 0) / leads.length) * 100)}% of all leads` : '' },
+    { label: 'Qualified', value: (counts.get('qualified') || 0).toLocaleString('en-IN'), icon: BadgeCheck, iconClass: 'bg-[#F1EAFE] text-[#7C3AED]', subtext: 'ready for sales follow-up' },
+    { label: 'Not Interested', value: (counts.get('not_interested') || 0).toLocaleString('en-IN'), icon: PhoneOff, iconClass: 'bg-[#FDECEC] text-[#DC2626]', subtext: 'excluded from calling' },
   ];
 
   return (
@@ -71,20 +71,15 @@ export const ModernLeads: React.FC = () => {
         }
       />
 
-      {/* Stat strip */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-5 mb-5">
-        {stats.map((s, i) => (
-          <MCard key={s.label} className="px-5 py-4">
-            <div style={{ animationDelay: `${i * 60}ms` }} className="anim-enter">
-              <p className={clsx('text-[24px] leading-none font-bold tabular-nums', s.color)}>{s.value}</p>
-              <p className="text-xs text-[#98A2B3] font-medium mt-1.5">{s.label}</p>
-            </div>
-          </MCard>
+      {/* Stat strip (design #2) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-6">
+        {stats.map((st, i) => (
+          <MStatCard key={st.label} {...st} delay={i * 60} />
         ))}
       </div>
 
       {/* Filter pills + search */}
-      <div className="flex flex-wrap items-center gap-2.5 mb-5">
+      <div className="flex flex-wrap items-center gap-2.5 mb-6">
         <div className="flex flex-wrap gap-1.5">
           {FILTERS.map((f) => (
             <button

@@ -18,8 +18,6 @@ import {
   Target,
   Heart,
   Clock,
-  TrendingUp,
-  TrendingDown,
   Download,
   Plus,
   ArrowRight,
@@ -32,7 +30,7 @@ import { leadsApi } from '../../services/api/leads';
 import { agentsApi } from '../../services/api/agents';
 import { callsApi } from '../../services/api/calls';
 import type { CallDocument, LeadDocument } from '../../types/api';
-import { MCard, Avatar, Pill, ScoreBar, scorePct, leadStatusMeta, fmtDuration, timeAgo, primaryPill, whitePill } from './ui';
+import { MCard, MStatCard, Avatar, Pill, ScoreBar, scorePct, leadStatusMeta, fmtDuration, timeAgo, primaryPill, whitePill } from './ui';
 
 /* ---------- date bucketing helpers ---------- */
 function dayKey(d: Date): string {
@@ -63,35 +61,6 @@ function bucketize<T extends { created_at: string }>(items: T[], days: { key: st
 }
 
 /* ---------- small building blocks ---------- */
-const Spark: React.FC<{ data: number[]; color: string; id: string }> = ({ data, color, id }) => (
-  <div className="w-[104px] h-9">
-    <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data.map((v, i) => ({ i, v }))} margin={{ top: 2, bottom: 2, left: 0, right: 0 }}>
-        <defs>
-          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.35} />
-            <stop offset="100%" stopColor={color} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <Area type="monotone" dataKey="v" stroke={color} strokeWidth={2} fill={`url(#${id})`} isAnimationActive={false} />
-      </AreaChart>
-    </ResponsiveContainer>
-  </div>
-);
-
-const DeltaChip: React.FC<{ pct: number | null }> = ({ pct }) => {
-  if (pct === null || !isFinite(pct)) return <span className="text-[11px] text-[#98A2B3] font-medium">last 7 days</span>;
-  const up = pct >= 0;
-  return (
-    <span
-      className={`inline-flex items-center gap-1 text-[11px] font-bold ${up ? 'text-emerald-600' : 'text-rose-600'}`}
-    >
-      {up ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-      {Math.abs(pct).toFixed(0)}%<span className="text-[#98A2B3] font-medium">vs prev. week</span>
-    </span>
-  );
-};
-
 function pctChange(series: number[]): number | null {
   const n = series.length;
   const cur = series.slice(n - 7).reduce((a, b) => a + b, 0);
@@ -157,33 +126,29 @@ export const ModernDashboard: React.FC = () => {
       label: 'Total Calls',
       value: (stats?.total_calls ?? calls.length).toLocaleString('en-IN'),
       icon: PhoneCall,
-      spark: callsPerDay,
-      color: '#F97316',
-      delta: pctChange(callsPerDay),
+      iconClass: 'bg-[#FFF1E6] text-[#EA580C]',
+      deltaPct: pctChange(callsPerDay),
     },
     {
       label: 'Leads Captured',
       value: leads.length.toLocaleString('en-IN'),
       icon: Target,
-      spark: leadsPerDay,
-      color: '#10B981',
-      delta: pctChange(leadsPerDay),
+      iconClass: 'bg-[#E7F8EE] text-[#16A34A]',
+      deltaPct: pctChange(leadsPerDay),
     },
     {
       label: 'Interested Rate',
       value: `${interestedRate}%`,
       icon: Heart,
-      spark: leadsPerDay,
-      color: '#8B5CF6',
-      delta: null,
+      iconClass: 'bg-[#F1EAFE] text-[#7C3AED]',
+      subtext: `${interested} of ${leads.length} leads`,
     },
     {
       label: 'Avg. Call Duration',
       value: fmtDuration(stats?.average_duration_seconds),
       icon: Clock,
-      spark: callsPerDay,
-      color: '#0EA5E9',
-      delta: null,
+      iconClass: 'bg-[#E6F4FE] text-[#0284C7]',
+      subtext: 'per completed call',
     },
   ];
 
@@ -210,29 +175,15 @@ export const ModernDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 mb-5">
+      {/* KPI cards (design #2: icon + label header, big value, delta pill) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-6">
         {kpis.map((k, i) => (
-          <MCard key={k.label} className="p-5">
-            <div className="anim-enter" style={{ animationDelay: `${i * 70}ms` }}>
-              <div className="flex items-start justify-between">
-                <div className="w-9 h-9 rounded-xl bg-[#F7F8FA] border border-[#EEF0F2] flex items-center justify-center">
-                  <k.icon className="w-[18px] h-[18px]" style={{ color: k.color }} strokeWidth={1.9} />
-                </div>
-                <Spark data={k.spark} color={k.color} id={`spark-${i}`} />
-              </div>
-              <p className="text-[28px] leading-none font-bold tracking-tight text-[#101828] mt-4 tabular-nums">{k.value}</p>
-              <div className="flex items-center justify-between mt-2">
-                <p className="text-[13px] text-[#667085] font-medium">{k.label}</p>
-                <DeltaChip pct={k.delta} />
-              </div>
-            </div>
-          </MCard>
+          <MStatCard key={k.label} {...k} delay={i * 70} />
         ))}
       </div>
 
       {/* Charts row */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-5">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
         <MCard className="p-6 xl:col-span-2">
           <div className="anim-enter" style={{ animationDelay: '120ms' }}>
             <div className="flex items-start justify-between mb-1">
@@ -318,7 +269,7 @@ export const ModernDashboard: React.FC = () => {
       </div>
 
       {/* Agents + latest leads */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-5">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
         <MCard className="p-6">
           <div className="anim-enter" style={{ animationDelay: '240ms' }}>
             <div className="flex items-center justify-between mb-4">
@@ -384,7 +335,7 @@ export const ModernDashboard: React.FC = () => {
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         {[
           { title: 'Start a Campaign', text: 'Launch outbound calls to a contact list', icon: Megaphone, to: '/campaigns' },
           { title: 'Reports & Analytics', text: 'Deep-dive call and lead performance', icon: BarChart3, to: '/reports' },

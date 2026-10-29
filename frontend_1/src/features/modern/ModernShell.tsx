@@ -60,7 +60,7 @@ export const ModernShell: React.FC = () => {
       title={item.name}
       className={({ isActive }) =>
         clsx(
-          'relative w-[52px] py-2 rounded-2xl flex flex-col items-center gap-1 transition-all duration-200',
+          'relative w-[60px] py-2.5 rounded-2xl flex flex-col items-center gap-1 transition-all duration-200',
           isActive
             ? 'bg-[#101828] text-white shadow-[0_6px_16px_-6px_rgba(16,24,40,0.5)]'
             : 'text-[#667085] hover:text-[#101828] hover:bg-[#EFF1F4]'
@@ -68,7 +68,7 @@ export const ModernShell: React.FC = () => {
       }
     >
       <item.icon className="w-5 h-5" strokeWidth={1.9} />
-      <span className="text-[8.5px] font-semibold leading-none tracking-wide">{item.name}</span>
+      <span className="text-[9.5px] font-semibold leading-none tracking-wide">{item.name}</span>
       {item.live && activeCount > 0 && (
         <span className="absolute top-1.5 right-2 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white" />
       )}
@@ -78,7 +78,7 @@ export const ModernShell: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#F4F5F7] text-[#101828] flex">
       {/* Icon rail (desktop) */}
-      <aside className="hidden md:flex w-[76px] shrink-0 flex-col items-center bg-white border-r border-[#E8EAED] sticky top-0 h-screen py-4 z-40">
+      <aside className="hidden md:flex w-[84px] shrink-0 flex-col items-center bg-white border-r border-[#E8EAED] sticky top-0 h-screen py-4 z-40">
         <NavLink to="/" className="mb-4" title="ARB SoftTech">
           <BrandMark className="w-10 h-10" />
         </NavLink>

@@ -29,6 +29,14 @@ import { ModernLeads } from '../features/modern/ModernLeads';
 import { ModernCalls } from '../features/modern/ModernCalls';
 import { ModernAgents } from '../features/modern/ModernAgents';
 import { ModernBusinesses } from '../features/modern/ModernBusinesses';
+import { ModernCampaigns } from '../features/modern/ModernCampaigns';
+import { ModernContacts } from '../features/modern/ModernContacts';
+import { ModernFollowups } from '../features/modern/ModernFollowups';
+import { ModernReports } from '../features/modern/ModernReports';
+import { ModernInvoices } from '../features/modern/ModernInvoices';
+import { ModernQuestionnaires } from '../features/modern/ModernQuestionnaires';
+import { ModernSettings } from '../features/modern/ModernSettings';
+import { ModernActiveCalls } from '../features/modern/ModernActiveCalls';
 
 export const router = createBrowserRouter([
   {
@@ -39,24 +47,24 @@ export const router = createBrowserRouter([
       { path: 'businesses', element: <LookPage classic={<BusinessesPage />} modern={<ModernBusinesses />} /> },
       { path: 'businesses/:id', element: <BusinessDetailPage /> },
       { path: 'calls', element: <LookPage classic={<CallsPage />} modern={<ModernCalls />} /> },
-      { path: 'active-calls', element: <ActiveCallsPage /> },
+      { path: 'active-calls', element: <LookPage classic={<ActiveCallsPage />} modern={<ModernActiveCalls />} /> },
       { path: 'queue', element: <QueuePage /> },
       { path: 'model-lab', element: <ModelLabPage /> },
       { path: 'agents', element: <LookPage classic={<AgentsPage />} modern={<ModernAgents />} /> },
       { path: 'agents/:id', element: <AgentWorkspacePage /> },
-      { path: 'questionnaires', element: <QuestionnairesPage /> },
+      { path: 'questionnaires', element: <LookPage classic={<QuestionnairesPage />} modern={<ModernQuestionnaires />} /> },
       { path: 'questionnaires/:id', element: <QuestionnaireEditorPage /> },
-      { path: 'campaigns', element: <CampaignsPage /> },
-      { path: 'contacts', element: <ContactsPage /> },
+      { path: 'campaigns', element: <LookPage classic={<CampaignsPage />} modern={<ModernCampaigns />} /> },
+      { path: 'contacts', element: <LookPage classic={<ContactsPage />} modern={<ModernContacts />} /> },
       { path: 'leads', element: <LookPage classic={<LeadsPage />} modern={<ModernLeads />} /> },
-      { path: 'followups', element: <FollowupsPage /> },
-      { path: 'reports', element: <ReportsPage /> },
-      { path: 'invoices', element: <InvoicesPage /> },
+      { path: 'followups', element: <LookPage classic={<FollowupsPage />} modern={<ModernFollowups />} /> },
+      { path: 'reports', element: <LookPage classic={<ReportsPage />} modern={<ModernReports />} /> },
+      { path: 'invoices', element: <LookPage classic={<InvoicesPage />} modern={<ModernInvoices />} /> },
       { path: 'settings/models', element: <ModelConfigPage /> },
       { path: 'settings/health', element: <HealthPage /> },
       { path: 'settings/telephony', element: <SettingsPage initialTab="telephony" /> },
       { path: 'settings/transcript', element: <SettingsPage initialTab="transcript" /> },
-      { path: 'settings', element: <SettingsPage /> },
+      { path: 'settings', element: <LookPage classic={<SettingsPage />} modern={<ModernSettings />} /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

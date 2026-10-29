@@ -1,5 +1,6 @@
 import React from 'react';
 import { clsx } from 'clsx';
+import { Info, ArrowUp, ArrowDown } from 'lucide-react';
 
 /**
  * Shared building blocks for the Modern experience.
@@ -20,6 +21,53 @@ export const MCard: React.FC<{ className?: string; children: React.ReactNode }> 
   >
     {children}
   </div>
+);
+
+/**
+ * Stat card in the "design #2" language: icon-in-circle + label header
+ * row, one large value, and a delta pill with a comparison caption.
+ * Used for every KPI/stat strip across the Modern experience.
+ */
+export const MStatCard: React.FC<{
+  label: string;
+  value: string;
+  icon: React.ElementType;
+  iconClass?: string;
+  deltaPct?: number | null;
+  deltaCaption?: string;
+  subtext?: string;
+  delay?: number;
+}> = ({ label, value, icon: Icon, iconClass = 'bg-[#F2F4F7] text-[#344054]', deltaPct, deltaCaption = 'vs previous 7 days', subtext, delay = 0 }) => (
+  <MCard className="p-[22px]">
+    <div className="anim-enter" style={{ animationDelay: `${delay}ms` }}>
+      <div className="flex items-center gap-3">
+        <span className={clsx('w-11 h-11 rounded-full flex items-center justify-center shrink-0', iconClass)}>
+          <Icon className="w-5 h-5" strokeWidth={1.9} />
+        </span>
+        <p className="text-[15px] font-semibold text-[#101828] flex-1 leading-snug">{label}</p>
+        <Info className="w-[18px] h-[18px] text-[#C4CBD4] shrink-0" />
+      </div>
+      <p className="text-[34px] leading-none font-extrabold tracking-tight text-[#101828] mt-4 tabular-nums">{value}</p>
+      <div className="flex items-center gap-2 mt-3.5 min-h-[22px]">
+        {deltaPct !== undefined && deltaPct !== null && isFinite(deltaPct) ? (
+          <>
+            <span
+              className={clsx(
+                'inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-bold',
+                deltaPct >= 0 ? 'bg-[#E7F8EE] text-[#16A34A]' : 'bg-[#FDECEC] text-[#DC2626]'
+              )}
+            >
+              {deltaPct >= 0 ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
+              {Math.abs(deltaPct).toFixed(0)}%
+            </span>
+            <span className="text-[13px] text-[#98A2B3]">{deltaCaption}</span>
+          </>
+        ) : (
+          <span className="text-[13px] text-[#98A2B3]">{subtext || ''}</span>
+        )}
+      </div>
+    </div>
+  </MCard>
 );
 
 export const MPageHeader: React.FC<{

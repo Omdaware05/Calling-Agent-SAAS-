@@ -49,7 +49,7 @@ export const ModernAgents: React.FC = () => {
         </MCard>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {agents.map((agent, i) => (
           <MCard key={agent.agent_id} className="p-6 anim-enter">
             <div style={{ animationDelay: `${Math.min(i * 60, 300)}ms` }} className="anim-enter">

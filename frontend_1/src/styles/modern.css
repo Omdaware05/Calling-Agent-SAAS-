@@ -23,6 +23,17 @@ html[data-look='modern'] body {
   background-color: #f3f4f6 !important;
 }
 
+/* Modern typeface: Plus Jakarta Sans (geometric, friendly, highly
+   legible) — Classic keeps Inter. Everything in Modern inherits it. */
+html[data-look='modern'] body,
+html[data-look='modern'] button,
+html[data-look='modern'] input,
+html[data-look='modern'] select,
+html[data-look='modern'] textarea {
+  font-family: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif !important;
+  letter-spacing: -0.011em;
+}
+
 /* No ambient aurora, no glass blur anywhere in the modern look */
 html[data-look='modern'] .ambient-container {
   display: none !important;
