@@ -72,6 +72,7 @@ def map_call_to_document(c: Call) -> Dict[str, Any]:
         "contact_id": c.contact_id,
         "phone_number": c.phone_number,
         "state": state,
+        "termination_reason": c.termination_reason,
         "duration": c.duration or 0.0,
         "provider": "vobiz",
         "created_at": c.created_at.isoformat() if c.created_at else datetime.now(UTC).isoformat(),

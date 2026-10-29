@@ -894,10 +894,17 @@ class CallService:
                     await session.commit()
                     return call
                 except Exception as sarvam_err:
-                    logger.error(f"[CallService] VoBiz dispatch failed for call {call_id}: {sarvam_err}")
+                    err_str = str(sarvam_err)
+                    logger.error(f"[CallService] VoBiz dispatch failed for call {call_id}: {err_str}")
                     call.status = STATUS_FAILED
                     call.ended_at = datetime.now(UTC)
-                    await persist_call_event(session, call.id, "call.failed", {"error": str(sarvam_err)})
+                    if "Insufficient balance" in err_str or "402" in err_str:
+                        call.termination_reason = "Insufficient VoBiz balance"
+                        call.disposition = "insufficient_balance"
+                    else:
+                        call.termination_reason = err_str[:64]
+                        call.disposition = "carrier_error"
+                    await persist_call_event(session, call.id, "call.failed", {"error": err_str})
                     await session.commit()
                     return call
 

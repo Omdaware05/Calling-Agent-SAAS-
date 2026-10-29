@@ -367,6 +367,7 @@ async def get_agent_dashboard(
             "agent_id": c.agent_id,
             "phone_number": c.phone_number,
             "state": state,
+            "termination_reason": c.termination_reason,
             "duration": c.duration or 0.0,
             "provider": (c.context_data or {}).get("provider", "vobiz"),
             "created_at": c.created_at.isoformat(),
