@@ -6,6 +6,8 @@ import { QuickDialModal } from './QuickDialModal';
 import { AuthModal } from './AuthModal';
 import { GlowProvider } from '../effects/GlowProvider';
 import { AmbientBackground } from '../effects/AmbientBackground';
+import { ModernShell } from '../../features/modern/ModernShell';
+import { useTheme } from '../../app/providers/ThemeProvider';
 import { clsx } from 'clsx';
 
 export const AppShell: React.FC = () => {
@@ -30,6 +32,20 @@ export const AppShell: React.FC = () => {
     window.addEventListener('voxora-quick-dial', handleTrigger);
     return () => window.removeEventListener('voxora-quick-dial', handleTrigger);
   }, []);
+
+  const { look } = useTheme();
+
+  // Modern look: a completely separate shell (icon rail + top bar).
+  // Global modals stay mounted in both looks.
+  if (look === 'modern') {
+    return (
+      <>
+        <ModernShell />
+        <QuickDialModal isOpen={quickDialOpen} onClose={() => setQuickDialOpen(false)} />
+        <AuthModal />
+      </>
+    );
+  }
 
   return (
     <GlowProvider>

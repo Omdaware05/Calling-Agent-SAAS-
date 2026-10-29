@@ -4,10 +4,9 @@ import {
   Sun,
   Moon,
   Search,
-  Layers,
-  Sparkles,
 } from 'lucide-react';
-import { useTheme, type Look } from '../../app/providers/ThemeProvider';
+import { useTheme } from '../../app/providers/ThemeProvider';
+import { LookToggle } from './LookToggle';
 import { BusinessSelector } from '../ui/BusinessSelector';
 
 interface HeaderProps {
@@ -16,7 +15,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenMobileSidebar }) => {
-  const { resolvedTheme, toggleTheme, look, setLook } = useTheme();
+  const { resolvedTheme, toggleTheme, look } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
 
   return (
@@ -49,35 +48,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileSidebar }) => {
         {/* Business Workspace Selector */}
         <BusinessSelector />
 
-        {/* Look Switcher: Classic (glass) vs Modern (clean light) */}
-        <div
-          className="flex items-center p-1 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/[0.08]"
-          role="group"
-          aria-label="Interface look"
-          title="Switch interface look"
-        >
-          {(
-            [
-              { id: 'classic', label: 'Classic', Icon: Layers },
-              { id: 'modern', label: 'Modern', Icon: Sparkles },
-            ] as { id: Look; label: string; Icon: typeof Layers }[]
-          ).map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setLook(id)}
-              aria-pressed={look === id}
-              className={
-                look === id
-                  ? 'flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-white text-slate-900 shadow-sm text-[11px] font-semibold transition-all'
-                  : 'flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-slate-500 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white text-[11px] font-semibold transition-all'
-              }
-            >
-              <Icon className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">{label}</span>
-            </button>
-          ))}
-        </div>
+        {/* Look Switcher: Classic / Modern */}
+        <LookToggle />
 
         {/* Theme Switcher (classic look only — modern is always light) */}
         {look === 'classic' && (

@@ -23,26 +23,32 @@ import { ModelConfigPage } from '../features/models/ModelConfigPage';
 import { ModelLabPage } from '../features/model_lab/ModelLabPage';
 import { HealthPage } from '../features/health/HealthPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
+import { LookPage } from '../features/modern/LookPage';
+import { ModernDashboard } from '../features/modern/ModernDashboard';
+import { ModernLeads } from '../features/modern/ModernLeads';
+import { ModernCalls } from '../features/modern/ModernCalls';
+import { ModernAgents } from '../features/modern/ModernAgents';
+import { ModernBusinesses } from '../features/modern/ModernBusinesses';
 
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <AppShell />,
     children: [
-      { index: true, element: <DashboardPage /> },
-      { path: 'businesses', element: <BusinessesPage /> },
+      { index: true, element: <LookPage classic={<DashboardPage />} modern={<ModernDashboard />} /> },
+      { path: 'businesses', element: <LookPage classic={<BusinessesPage />} modern={<ModernBusinesses />} /> },
       { path: 'businesses/:id', element: <BusinessDetailPage /> },
-      { path: 'calls', element: <CallsPage /> },
+      { path: 'calls', element: <LookPage classic={<CallsPage />} modern={<ModernCalls />} /> },
       { path: 'active-calls', element: <ActiveCallsPage /> },
       { path: 'queue', element: <QueuePage /> },
       { path: 'model-lab', element: <ModelLabPage /> },
-      { path: 'agents', element: <AgentsPage /> },
+      { path: 'agents', element: <LookPage classic={<AgentsPage />} modern={<ModernAgents />} /> },
       { path: 'agents/:id', element: <AgentWorkspacePage /> },
       { path: 'questionnaires', element: <QuestionnairesPage /> },
       { path: 'questionnaires/:id', element: <QuestionnaireEditorPage /> },
       { path: 'campaigns', element: <CampaignsPage /> },
       { path: 'contacts', element: <ContactsPage /> },
-      { path: 'leads', element: <LeadsPage /> },
+      { path: 'leads', element: <LookPage classic={<LeadsPage />} modern={<ModernLeads />} /> },
       { path: 'followups', element: <FollowupsPage /> },
       { path: 'reports', element: <ReportsPage /> },
       { path: 'invoices', element: <InvoicesPage /> },
