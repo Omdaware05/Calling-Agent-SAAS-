@@ -52,6 +52,9 @@ class SarvamTelephonyService:
 
     def _get_public_url(self) -> str:
         """Returns the public HTTPS URL for webhooks (auto-detects from local ngrok API, tunnel file, or settings)."""
+        now = time.time()
+        if hasattr(self, "_cached_public_url") and self._cached_public_url and (now - getattr(self, "_cached_url_time", 0) < 600):
+            return self._cached_public_url
         # 1. Check local ngrok API
         try:
             with httpx.Client(timeout=2.5) as client:
@@ -63,7 +66,9 @@ class SarvamTelephonyService:
                         addr = str(t.get("config", {}).get("addr", ""))
                         public_url = t.get("public_url", "")
                         if backend_port_str in addr and public_url.startswith("https://"):
-                            return public_url.rstrip("/")
+                            self._cached_public_url = public_url.rstrip("/")
+                            self._cached_url_time = now
+                            return self._cached_public_url
                     for t in tunnels:
                         public_url = t.get("public_url", "")
                         if public_url.startswith("https://"):
@@ -514,31 +519,43 @@ class SarvamTelephonyService:
             return
 
         total_len = len(mulaw_bytes)
-        offset = 0
-        frame_interval = 0.070  # 70ms pacing for 80ms audio chunks prevents telephony underrun
+        prebuffer_chunks = 5  # Pre-send 400ms burst to prime carrier jitter buffer and eliminate underrun
+        start_monotonic = time.monotonic()
 
         logger.info(f"[SarvamTelephony] Streaming {total_len} bytes to VoBiz (streamId: {stream_id})...")
         try:
+            chunk_idx = 0
+            offset = 0
             while offset < total_len:
                 chunk = mulaw_bytes[offset : offset + chunk_size]
                 b64_payload = base64.b64encode(chunk).decode("ascii")
-                msg = {
-                    "event": "playAudio",
-                    "streamId": stream_id,
-                    "media": {
-                        "contentType": "audio/x-mulaw",
-                        "sampleRate": 8000,
-                        "payload": b64_payload,
-                    },
-                }
-                await websocket.send_text(json.dumps(msg))
+                msg_str = (
+                    f'{{"event":"playAudio","streamId":"{stream_id}",'
+                    f'"media":{{"contentType":"audio/x-mulaw","sampleRate":8000,"payload":"{b64_payload}"}}}}'
+                )
+                await websocket.send_text(msg_str)
                 if on_chunk_sent:
                     try:
                         on_chunk_sent(chunk)
                     except Exception:
                         pass
+
                 offset += chunk_size
-                await asyncio.sleep(frame_interval)
+                chunk_idx += 1
+
+                # Burst first 400ms into carrier queue immediately
+                if chunk_idx < prebuffer_chunks:
+                    continue
+
+                # Drift-compensated monotonic pacing
+                chunk_dur = len(chunk) / 8000.0
+                target_elapsed = (chunk_idx - prebuffer_chunks + 1) * chunk_dur
+                actual_elapsed = time.monotonic() - start_monotonic
+                sleep_needed = target_elapsed - actual_elapsed
+
+                if sleep_needed > 0.005:
+                    await asyncio.sleep(sleep_needed)
+
             logger.info(f"[SarvamTelephony] Finished playing audio to VoBiz (streamId: {stream_id}).")
         except asyncio.CancelledError:
             logger.info(f"[SarvamTelephony] Outbound playback cancelled (caller barge-in) for stream {stream_id}")
@@ -1455,7 +1472,11 @@ class SarvamTelephonyService:
                         rec.duration = call_duration
                         rec.status = "ready"
 
-                    await session.commit()
+                    try:
+                        await session.commit()
+                    except Exception as commit_err:
+                        await session.rollback()
+                        logger.debug(f"[SarvamTelephony] Recording commit race handled: {commit_err}")
 
                     # Export call artifacts directly to root data/ folder
                     try:

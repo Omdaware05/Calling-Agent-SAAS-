@@ -308,6 +308,7 @@ async def persist_post_call_artifacts(session: AsyncSession, call: Call, payload
             file_size = len(audio_data) if audio_data else None
             effective_duration = float(call.duration or 0.0)
 
+            recording = (await session.execute(select(Recording).where(Recording.call_id == call.id))).scalar_one_or_none()
             if not recording:
                 recording = Recording(
                     tenant_id=call.tenant_id,
@@ -338,6 +339,7 @@ async def persist_post_call_artifacts(session: AsyncSession, call: Call, payload
                 logger.warning(f"Error persisting fallback call audio: {e}")
 
             file_size = len(audio_data)
+            recording = (await session.execute(select(Recording).where(Recording.call_id == call.id))).scalar_one_or_none()
             if not recording:
                 recording = Recording(
                     tenant_id=call.tenant_id,

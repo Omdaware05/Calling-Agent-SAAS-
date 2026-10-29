@@ -370,7 +370,10 @@ async def get_call_transcript(
         raise HTTPException(status_code=404, detail="Call not found")
 
     if not call.transcript or not call.transcript.segments:
-        await persist_post_call_artifacts(db, call)
+        try:
+            await persist_post_call_artifacts(db, call)
+        except Exception:
+            pass
         await db.commit()
         res = await db.execute(stmt)
         call = res.scalar_one_or_none()
@@ -424,8 +427,11 @@ async def get_call_recording(
         raise HTTPException(status_code=404, detail="Call not found")
 
     # If call does not have a recording in storage yet, persist/generate and upload
-    if not call.recording or not (await storage_service.exists(call.recording.storage_key)):
-        await persist_post_call_artifacts(db, call)
+    if (not call.recording or not (await storage_service.exists(call.recording.storage_key))) and (call.status in TERMINAL_STATES):
+        try:
+            await persist_post_call_artifacts(db, call)
+        except Exception:
+            pass
         await db.commit()
         res = await db.execute(stmt)
         call = res.scalar_one_or_none()
@@ -525,7 +531,10 @@ async def get_call_interest(
 
     # If transcript is missing, try syncing from Dograh first
     if not call.transcript or not call.transcript.segments:
-        await persist_post_call_artifacts(db, call)
+        try:
+            await persist_post_call_artifacts(db, call)
+        except Exception:
+            pass
         await db.commit()
         res = await db.execute(stmt)
         call = res.scalar_one_or_none()
@@ -559,7 +568,10 @@ async def get_call_followup(
         raise HTTPException(status_code=404, detail="Call not found")
 
     if not call.transcript or not call.transcript.segments:
-        await persist_post_call_artifacts(db, call)
+        try:
+            await persist_post_call_artifacts(db, call)
+        except Exception:
+            pass
         await db.commit()
         res = await db.execute(stmt)
         call = res.scalar_one_or_none()
