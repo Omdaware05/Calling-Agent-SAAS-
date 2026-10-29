@@ -23,6 +23,16 @@ except Exception as e:
     followup_detector = None
     FOLLOWUP_CATEGORIES = {}
 
+try:
+    # One-file offline analyzer (stdlib only): customer-info extraction,
+    # why-interested / why-not reasons with evidence, lead score, Excel export.
+    from transcript_analyzer import analyze_transcript as _analyze_transcript_offline
+    _analyzer_available = True
+except Exception as e:
+    logging.getLogger(__name__).warning(f"Could not import transcript_analyzer: {e}")
+    _analyzer_available = False
+    _analyze_transcript_offline = None
+
 from app.models.call import Call, Transcript, TranscriptSegment
 from app.models.lead import Lead, Followup
 from app.models.contact import Contact
@@ -181,6 +191,23 @@ Return ONLY a valid JSON object with these exact keys:
                 "created_at": datetime.now(UTC).isoformat(),
             }
 
+        # 0. Offline analyzer (always available, stdlib only): extracts the
+        # customer's stated details and WHY-reasons with evidence quotes.
+        # This runs fully offline on any machine; Gemini/local classification
+        # below stays the classifier of record.
+        offline: Dict[str, Any] = {}
+        customer_info: Dict[str, Any] = {}
+        why_interested: List[Dict[str, str]] = []
+        why_not_interested: List[Dict[str, str]] = []
+        if _analyzer_available and _analyze_transcript_offline is not None:
+            try:
+                offline = _analyze_transcript_offline(transcript_text)
+                customer_info = offline.get("customer_info") or {}
+                why_interested = offline.get("why_interested") or []
+                why_not_interested = offline.get("why_not_interested") or []
+            except Exception as ae:
+                logger.warning(f"Offline transcript analyzer failed: {ae}")
+
         # 1. Primary: Evaluate using Gemini LLM
         gemini_result = None
         try:
@@ -239,14 +266,19 @@ Return ONLY a valid JSON object with these exact keys:
                     "signals": signals,
                     "rule_applied": rule_applied,
                     "analyzer": "gemini",
+                    "customer_info": customer_info,
+                    "why_interested": why_interested,
+                    "why_not_interested": why_not_interested,
                 }
-                phone = call.phone_number or call.caller_number
+                phone = customer_info.get("phone") or call.phone_number or call.caller_number
                 if not existing_lead:
                     existing_lead = Lead(
                         tenant_id=call.tenant_id,
                         agent_id=call.agent_id,
                         contact_id=call.contact_id,
                         call_id=call.id,
+                        name=customer_info.get("name"),
+                        email=customer_info.get("email"),
                         phone_number=phone,
                         score=confidence,
                         reason=reasoning,
@@ -259,6 +291,10 @@ Return ONLY a valid JSON object with these exact keys:
                     existing_lead.reason = reasoning
                     existing_lead.status = "interested"
                     existing_lead.metadata_json = lead_metadata
+                    if customer_info.get("name"):
+                        existing_lead.name = customer_info["name"]
+                    if customer_info.get("email"):
+                        existing_lead.email = customer_info["email"]
                     session.add(existing_lead)
             else:
                 # If not genuinely interested, ensure FALSE leads are removed from pipeline
@@ -302,6 +338,10 @@ Return ONLY a valid JSON object with these exact keys:
                 "signals": signals,
                 "languages": languages,
                 "keywords": [f"Lang: {l}" for l in languages] + signals,
+                "customer_info": customer_info,
+                "why_interested": why_interested,
+                "why_not_interested": why_not_interested,
+                "offline_lead_score": offline.get("lead_score"),
                 "followup": followup_info,
                 "raw_model_output": gemini_result,
                 "created_at": datetime.now(UTC).isoformat(),
@@ -356,6 +396,9 @@ Return ONLY a valid JSON object with these exact keys:
                         "signals": diag.signals_detected,
                         "rule_applied": diag.rule_applied,
                         "analyzer": "rule_engine",
+                        "customer_info": customer_info,
+                        "why_interested": why_interested,
+                        "why_not_interested": why_not_interested,
                     }
                     if not lead:
                         lead = Lead(
@@ -363,7 +406,9 @@ Return ONLY a valid JSON object with these exact keys:
                             agent_id=call.agent_id,
                             contact_id=call.contact_id,
                             call_id=call.id,
-                            phone_number=call.phone_number or call.caller_number,
+                            name=customer_info.get("name"),
+                            email=customer_info.get("email"),
+                            phone_number=customer_info.get("phone") or call.phone_number or call.caller_number,
                             score=confidence,
                             reason=diag.reason,
                             status="interested",
@@ -375,6 +420,10 @@ Return ONLY a valid JSON object with these exact keys:
                         lead.reason = diag.reason
                         lead.status = "interested"
                         lead.metadata_json = lead_metadata
+                        if customer_info.get("name"):
+                            lead.name = customer_info["name"]
+                        if customer_info.get("email"):
+                            lead.email = customer_info["email"]
                         session.add(lead)
                 else:
                     if lead:
@@ -417,6 +466,10 @@ Return ONLY a valid JSON object with these exact keys:
                     "signals": diag.signals_detected,
                     "languages": diag.languages_detected,
                     "keywords": keywords,
+                    "customer_info": customer_info,
+                    "why_interested": why_interested,
+                    "why_not_interested": why_not_interested,
+                    "offline_lead_score": offline.get("lead_score"),
                     "followup": followup_info,
                     "raw_model_output": diag.model_dump(),
                     "created_at": datetime.now(UTC).isoformat(),
