@@ -13,6 +13,7 @@ from app.api.routes.contacts import router as contacts_router
 from app.api.routes.followups import router as followups_router
 from app.api.routes.general import router as general_router
 from app.api.routes.invoices import router as invoices_router
+from app.api.routes.calendar import router as calendar_router
 from app.api.routes.leads import router as leads_router
 from app.api.routes.questionnaires import router as questionnaires_router
 from app.api.routes.reports import router as reports_router
@@ -47,7 +48,23 @@ async def lifespan(app: FastAPI):
         logger.error(f"Database initialization warning: {e}")
 
     logger.info("Backend service initialized.")
+
+    # Automatic follow-up dispatcher: places customer-requested callback
+    # calls when their scheduled time arrives (offline asyncio loop).
+    dispatcher_task = None
+    try:
+        import asyncio as _asyncio
+
+        from app.services.followup_dispatcher import run_dispatcher_forever
+
+        dispatcher_task = _asyncio.create_task(run_dispatcher_forever())
+    except Exception as e:
+        logger.warning(f"Follow-up dispatcher not started: {e}")
+
     yield
+
+    if dispatcher_task is not None:
+        dispatcher_task.cancel()
     logger.info("Backend service shutting down.")
 
 
@@ -242,6 +259,7 @@ routers_to_mount = [
     stats_router,
     voice_router,
     invoices_router,
+    calendar_router,
     general_router,
 ]
 

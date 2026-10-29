@@ -520,6 +520,28 @@ Return ONLY a valid JSON object with these exact keys:
             except Exception:
                 pass
 
+        # Automatic rescheduling from the customer's own words (offline):
+        # if they named a time ("tomorrow at 5 pm", "kal shaam 6 baje",
+        # "2 ghante baad"), that exact moment wins over the category's
+        # fixed delay; every auto-scheduled time is then moved inside
+        # working hours (09:00-19:00 IST) - after-hours requests roll to
+        # 09:00 the next day. The dispatcher places the call when due.
+        customer_time_note = ""
+        try:
+            from app.services.callback_time import parse_callback_time, next_working_slot
+
+            desired = parse_callback_time(transcript_text)
+            if desired is not None:
+                scheduled_dt = next_working_slot(desired)
+                customer_time_note = (
+                    f" Customer asked: '{res.matched_utterance or 'callback'}' -> "
+                    f"auto-scheduled for {scheduled_dt.strftime('%d %b %Y, %I:%M %p')} IST."
+                )
+            elif scheduled_dt is not None:
+                scheduled_dt = next_working_slot(scheduled_dt)
+        except Exception as ce:
+            logger.debug(f"Callback-time scheduling skipped: {ce}")
+
         followup_record_id = None
         # Auto-create or update Followup record if category requires follow-up
         call_phone = call.phone_number or call.caller_number
@@ -527,7 +549,7 @@ Return ONLY a valid JSON object with these exact keys:
             stmt = select(Followup).where(Followup.call_id == call.id)
             db_res = await session.execute(stmt)
             followup = db_res.scalar_one_or_none()
-            notes_str = f"Category {res.category_id}: {res.name}. Action: {res.action}. (Matched: '{res.matched_utterance or 'N/A'}')"
+            notes_str = f"Category {res.category_id}: {res.name}. Action: {res.action}. (Matched: '{res.matched_utterance or 'N/A'}')" + customer_time_note
 
             if not followup:
                 followup = Followup(

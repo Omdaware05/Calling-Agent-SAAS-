@@ -37,6 +37,7 @@ import { ModernInvoices } from '../features/modern/ModernInvoices';
 import { ModernQuestionnaires } from '../features/modern/ModernQuestionnaires';
 import { ModernSettings } from '../features/modern/ModernSettings';
 import { ModernActiveCalls } from '../features/modern/ModernActiveCalls';
+import { ModernCalendar } from '../features/modern/ModernCalendar';
 
 export const router = createBrowserRouter([
   {
@@ -58,6 +59,7 @@ export const router = createBrowserRouter([
       { path: 'contacts', element: <LookPage classic={<ContactsPage />} modern={<ModernContacts />} /> },
       { path: 'leads', element: <LookPage classic={<LeadsPage />} modern={<ModernLeads />} /> },
       { path: 'followups', element: <LookPage classic={<FollowupsPage />} modern={<ModernFollowups />} /> },
+      { path: 'calendar', element: <ModernCalendar /> },
       { path: 'reports', element: <LookPage classic={<ReportsPage />} modern={<ModernReports />} /> },
       { path: 'invoices', element: <LookPage classic={<InvoicesPage />} modern={<ModernInvoices />} /> },
       { path: 'settings/models', element: <ModelConfigPage /> },

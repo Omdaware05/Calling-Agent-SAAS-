@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
+  CalendarDays,
   Building2,
   Bot,
   PhoneCall,
@@ -37,6 +38,7 @@ const NAV: NavItem[] = [
   { name: 'Contacts', href: '/contacts', icon: Users },
   { name: 'Leads', href: '/leads', icon: Target },
   { name: 'Follow-ups', href: '/followups', icon: CalendarClock },
+  { name: 'Calendar', href: '/calendar', icon: CalendarDays },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'Billing', href: '/invoices', icon: Receipt },
   { name: 'Settings', href: '/settings', icon: Settings },
