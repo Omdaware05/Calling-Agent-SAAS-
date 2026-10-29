@@ -131,6 +131,61 @@ _CALLBACK_CUES: List[Tuple[str, int, str]] = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# 2b. FIRST-QUESTION YES rule (business policy, added 2026-10-29):
+#     "If he says YES to the 1st question, the lead must be shortlisted."
+#     A bare "yes" is only a +1 agreement cue in the scoring below, so a
+#     caller who said yes at Q1 and then answered factually used to land in
+#     NEEDS_INFORMATION / UNCERTAIN and never got shortlisted. This rule
+#     looks at the customer's FIRST substantive reply (skipping a bare
+#     "hello") and, when it is an affirmative, shortlists the lead —
+#     unless the customer anywhere showed a hard negative (opt-out /
+#     explicit rejection / wrong number), which always wins.
+# ---------------------------------------------------------------------------
+
+_AFFIRMATIVE_START = re.compile(
+    # NOTE: no \b after the group — Python's \b does not fire after a
+    # Devanagari vowel sign (e.g. the ो in हो), so a bare "हो" never
+    # matched. A lookahead for end/space/punctuation works for all scripts
+    # and still rejects prefixes of longer words ("yesterday", "होता").
+    r"^\s*(yes|yeah|yep|sure|ok|okay|haan|ha|ho|हाँ|हो|होय|जी|बरोबर|चालेल|"
+    r"ठीक\s*है|theek\s*hai|thik\s*hai|बिल्कुल|bilkul|नक्की|nakki|हं|ह्म)"
+    r"(?=$|[\s!.।,?;])",
+    re.IGNORECASE,
+)
+_GREETING_ONLY_TURN = re.compile(
+    r"^\s*(hello|hi|hey|हॅलो|हेलो|हाय|नमस्ते|नमस्कार)[\s!.।,]*$",
+    re.IGNORECASE,
+)
+_HARD_NEGATIVE_LABELS = {"opt_out", "explicit_not_interested", "refusal_local", "wrong_number"}
+
+
+def first_question_yes_evidence(turns: List[Dict[str, str]]) -> Optional[str]:
+    """Return the customer's first-answer utterance if it was a YES to the
+    first question, else None. The first substantive customer turn is their
+    answer to Q1 (the agent opens with greeting + Q1)."""
+    for t in turns:
+        if t["role"] != "customer":
+            continue
+        text = (t["text"] or "").strip()
+        if not text or _GREETING_ONLY_TURN.match(text):
+            continue
+        if _AFFIRMATIVE_START.search(text.lower()):
+            return text[:200]
+        return None  # first real answer was not an affirmative
+    return None
+
+
+def _has_hard_negative(turns: List[Dict[str, str]]) -> bool:
+    """Engine-independent hard-negative check (opt-out / explicit no /
+    wrong number) using the builtin cue tables on ALL customer speech."""
+    cust = _customer_text(turns)
+    if not cust.strip():
+        return False
+    _, neg_signals = _score_cues(" " + cust.lower() + " ", _NEGATIVE_CUES)
+    return bool(_HARD_NEGATIVE_LABELS & set(neg_signals))
+
+
 def _score_cues(text_low: str, cues: List[Tuple[str, int, str]]) -> Tuple[int, List[str]]:
     score, signals = 0, []
     for pattern, weight, label in cues:
@@ -484,6 +539,27 @@ def analyze_transcript(text: str, source: str = "") -> Dict[str, Any]:
     why_in = _reasons_for(turns, _INTEREST_REASONS)
     why_not = _reasons_for(turns, _REJECTION_REASONS)
 
+    # FIRST-QUESTION YES policy: a YES to Q1 shortlists the lead at once,
+    # whichever engine classified the call — unless a hard negative exists.
+    fq_yes_quote = first_question_yes_evidence(turns)
+    first_q_yes = bool(fq_yes_quote) and not _has_hard_negative(turns) and not cls["opt_out"]
+    if first_q_yes:
+        why_in.insert(0, {
+            "code": "first_question_yes",
+            "reason": "Said YES to the very first question — shortlisted immediately",
+            "evidence": fq_yes_quote or "",
+        })
+        if cls["classification"] != "INTERESTED":
+            cls = {**cls,
+                   "classification": "INTERESTED",
+                   "binary": "INTERESTED",
+                   "confidence": max(float(cls["confidence"]), 0.92),
+                   "interest_strength": "HIGH",
+                   "reason": (f"Customer said YES to the first question "
+                              f"(\"{fq_yes_quote}\") — shortlisted at question 1. "
+                              + cls["reason"]),
+                   "rule_applied": cls["rule_applied"] + "+first_question_yes"}
+
     if cls["classification"] in ("INTERESTED", "NEEDS_INFORMATION", "CALLBACK_REQUESTED"):
         summary_reason = cls["reason"]
         if why_in:
@@ -511,6 +587,7 @@ def analyze_transcript(text: str, source: str = "") -> Dict[str, Any]:
         "why_not_interested": why_not,
         "signals": cls["signals"],
         "opt_out_do_not_call": cls["opt_out"],
+        "first_question_yes": first_q_yes,
         "callback_requested": cls["callback"],
         "customer_info": info,
         "customer_turns": sum(1 for t in turns if t["role"] == "customer"),

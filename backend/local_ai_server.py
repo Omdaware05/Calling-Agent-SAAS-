@@ -61,6 +61,13 @@ try:
             voices_path=str(KOKORO_VOICES_PATH),
         )
         logger.info("Kokoro ONNX TTS initialized successfully.")
+        try:
+            # Pre-warm: the first real synthesis otherwise pays ONNX
+            # first-run cost inside the first live call's greeting.
+            kokoro_engine.create(text="नमस्ते", voice="hf_alpha", speed=1.0, lang="hi")
+            logger.info("Kokoro TTS pre-warm complete.")
+        except Exception as kwe:
+            logger.warning(f"Kokoro pre-warm note: {kwe}")
     else:
         logger.warning(f"Kokoro model files missing at {KOKORO_MODEL_PATH}")
 except Exception as e:
@@ -215,6 +222,44 @@ class TTSRequest(BaseModel):
     response_format: Optional[str] = "wav"
 
 
+# TTS response cache: the greeting and the scripted questionnaire questions
+# are IDENTICAL on every call, yet were re-synthesized from scratch each
+# time — a major part of the "welcome speech starts late" complaint. The
+# first synthesis of a text is cached; every later call replays it in ~0ms.
+from collections import OrderedDict
+
+_tts_cache: "OrderedDict[str, bytes]" = OrderedDict()
+_TTS_CACHE_MAX = 256
+
+
+def _tts_cache_get(key: str) -> Optional[bytes]:
+    data = _tts_cache.get(key)
+    if data is not None:
+        _tts_cache.move_to_end(key)
+    return data
+
+
+def _tts_cache_put(key: str, data: bytes) -> None:
+    _tts_cache[key] = data
+    _tts_cache.move_to_end(key)
+    while len(_tts_cache) > _TTS_CACHE_MAX:
+        _tts_cache.popitem(last=False)
+
+
+def _silence_response(response_format: str):
+    """Brief silence instead of an HTTP error: a TTS failure must never
+    break a live call — dead air for 0.35s lets the next turn recover,
+    while a 500 makes the voice engine drop/error the conversation."""
+    sr = 24000
+    samples = np.zeros(int(sr * 0.35), dtype=np.float32)
+    if response_format == "pcm":
+        pcm = (samples * 32767.0).astype(np.int16).tobytes()
+        return Response(content=pcm, media_type="audio/pcm")
+    out_io = io.BytesIO()
+    sf.write(out_io, samples, sr, format="WAV")
+    return Response(content=out_io.getvalue(), media_type="audio/wav")
+
+
 @app.post("/v1/audio/speech")
 async def generate_speech(req: TTSRequest):
     text = req.input.strip()
@@ -234,6 +279,13 @@ async def generate_speech(req: TTSRequest):
         lang = "hi"
     else:
         lang = "en-us"
+
+    cache_key = f"{voice}|{speed}|{lang}|{req.response_format}|{text}"
+    cached_audio = _tts_cache_get(cache_key)
+    if cached_audio is not None:
+        media = "audio/pcm" if req.response_format == "pcm" else "audio/wav"
+        logger.info(f"TTS cache HIT ({len(cached_audio)} bytes) for: '{text[:35]}...'")
+        return Response(content=cached_audio, media_type=media)
 
     # 1. Primary High-Speed Accelerated Docker Kokoro CUDA (350ms vs 5000ms CPU)
     docker_url = os.getenv("KOKORO_DOCKER_URL", "http://localhost:8880")
@@ -259,15 +311,18 @@ async def generate_speech(req: TTSRequest):
                 data, sr = sf.read(io.BytesIO(audio_bytes))
                 pcm_data = (np.clip(data, -1.0, 1.0) * 32767.0).astype(np.int16).tobytes()
                 logger.info(f"Kokoro Docker CUDA synthesized {len(pcm_data)} PCM bytes in {dur}ms (voice={voice}, speed={speed}) for: '{text[:35]}...'")
+                _tts_cache_put(cache_key, pcm_data)
                 return Response(content=pcm_data, media_type="audio/pcm")
             logger.info(f"Kokoro Docker CUDA synthesized {len(audio_bytes)} WAV bytes in {dur}ms (voice={voice}, speed={speed}) for: '{text[:35]}...'")
+            _tts_cache_put(cache_key, audio_bytes)
             return Response(content=audio_bytes, media_type="audio/wav")
     except Exception as docker_err:
         logger.warning(f"Kokoro Docker unavailable ({docker_err}), falling back to local ONNX engine...")
 
     # 2. Fallback to Local Kokoro ONNX
     if not kokoro_engine:
-        raise HTTPException(status_code=503, detail="Local Kokoro TTS engine not loaded")
+        logger.error("Local Kokoro TTS engine not loaded — returning silence frame so the call survives")
+        return _silence_response(req.response_format)
 
     try:
         t0 = time.time()
@@ -282,18 +337,21 @@ async def generate_speech(req: TTSRequest):
         if req.response_format == "pcm":
             pcm_data = (np.clip(samples, -1.0, 1.0) * 32767.0).astype(np.int16).tobytes()
             logger.info(f"Local Kokoro synthesized {len(pcm_data)} raw PCM bytes in {dur}ms (voice={voice}) for: '{text[:35]}...'")
+            _tts_cache_put(cache_key, pcm_data)
             return Response(content=pcm_data, media_type="audio/pcm")
 
         out_io = io.BytesIO()
         sf.write(out_io, samples, sample_rate, format="WAV")
         wav_bytes = out_io.getvalue()
         logger.info(f"Local Kokoro synthesized {len(wav_bytes)} WAV bytes in {dur}ms (voice={voice}) for: '{text[:35]}...'")
+        _tts_cache_put(cache_key, wav_bytes)
 
         return Response(content=wav_bytes, media_type="audio/wav")
 
     except Exception as e:
-        logger.error(f"Error in speech synthesis: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        # Never 500 a live call: return a brief silence frame instead.
+        logger.error(f"Error in speech synthesis ({e}) — returning silence frame so the call survives", exc_info=True)
+        return _silence_response(req.response_format)
 
 
 try:
@@ -304,7 +362,48 @@ except ImportError:
     except ImportError:
         FastQuestionnaireOrchestrator = None
 
-http_client = httpx.AsyncClient(timeout=httpx.Timeout(6.0, connect=3.0))
+# 30s read (was 6s): a slow LLM turn used to time out and surface as an
+# HTTP error to the voice engine mid-call — heard by the customer as the
+# call breaking. A slow reply is recoverable; an error response is not.
+http_client = httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=3.0))
+
+
+def _spoken_fallback_response(messages: list, stream: bool):
+    """Graceful spoken fallback when BOTH LLM providers fail.
+
+    Returning HTTP 502 here made the voice engine error out mid-call
+    (the 'call breaks even at full range' complaint). A short holding
+    line keeps the conversation alive; the next turn retries the LLM.
+    """
+    convo = " ".join(str(m.get("content", "")) for m in messages if isinstance(m, dict))
+    if any(0x0900 <= ord(c) <= 0x097F for c in convo):
+        line = "माफ़ कीजिए, एक क्षण दीजिए, मैं फिर से प्रयास करता हूँ।"
+    else:
+        line = "Sorry, just a moment, let me try that again."
+    created_ts = int(time.time())
+    chat_id = f"chatcmpl-fallback-{int(time.time()*1000)}"
+    if stream:
+        async def _sse():
+            chunk = {
+                "id": chat_id, "object": "chat.completion.chunk",
+                "created": created_ts, "model": "fallback",
+                "choices": [{"index": 0,
+                             "delta": {"role": "assistant", "content": line},
+                             "finish_reason": "stop"}],
+            }
+            yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(_sse(), media_type="text/event-stream")
+    return JSONResponse(content={
+        "id": chat_id, "object": "chat.completion", "created": created_ts,
+        "model": "fallback",
+        "choices": [{"index": 0,
+                     "message": {"role": "assistant", "content": line},
+                     "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 0, "completion_tokens": len(line) // 4,
+                  "total_tokens": len(line) // 4},
+    })
 
 def clean_speech_text(text: str, is_subsequent: bool = False, is_final: bool = True) -> str:
     """Cleans LLM response text for speech synthesis: strips brackets, leading repeated greetings, formatting, and incomplete trailing sentences."""
@@ -489,8 +588,10 @@ async def chat_completions_proxy(request: Request):
             resp = await attempt_call(backup_url, backup_body, backup_headers)
             target_url = backup_url
         except Exception as backup_err:
-            logger.error(f"Both primary and backup LLM backends failed: {backup_err}")
-            raise HTTPException(status_code=502, detail=f"LLM proxy error: {primary_err} -> {backup_err}")
+            # Both providers down: do NOT 502 the voice engine mid-call —
+            # speak a short holding line and let the next turn retry.
+            logger.error(f"Both primary and backup LLM backends failed: {backup_err} — serving spoken fallback")
+            return _spoken_fallback_response(body_json.get("messages", []), stream)
 
     try:
         if stream:
@@ -572,8 +673,10 @@ async def chat_completions_proxy(request: Request):
             media_type=resp.headers.get("content-type"),
         )
     except Exception as e:
-        logger.error(f"Error handling LLM response ({target_url}): {e}")
-        raise HTTPException(status_code=502, detail=f"LLM proxy error: {e}")
+        # Same rule as the failover path: never surface a bare 502 to the
+        # voice engine mid-call — a spoken holding line keeps it alive.
+        logger.error(f"Error handling LLM response ({target_url}): {e} — serving spoken fallback")
+        return _spoken_fallback_response(body_json.get("messages", []) if 'body_json' in locals() else [], stream)
 
 
 if __name__ == "__main__":

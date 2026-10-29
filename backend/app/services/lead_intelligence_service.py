@@ -208,6 +208,12 @@ Return ONLY a valid JSON object with these exact keys:
             except Exception as ae:
                 logger.warning(f"Offline transcript analyzer failed: {ae}")
 
+        # Business policy (client rule): a YES to the FIRST question
+        # shortlists the lead immediately, whichever classifier runs below.
+        # An opt-out anywhere in the call always overrides it.
+        first_q_yes = bool(offline.get("first_question_yes")) and not bool(
+            offline.get("opt_out_do_not_call"))
+
         # 1. Primary: Evaluate using Gemini LLM
         gemini_result = None
         try:
@@ -227,6 +233,14 @@ Return ONLY a valid JSON object with these exact keys:
             rule_applied = gemini_result.get("rule_applied", "Gemini AI Lead Interest Intelligence")
             signals = gemini_result.get("signals", [])
             languages = gemini_result.get("languages", ["Hindi"])
+
+            # First-question YES policy: shortlist even if Gemini scored the
+            # rest of the call lower (opt-out still wins — handled below).
+            if first_q_yes and not opt_out:
+                is_interested = True
+                reasoning = ("Shortlisted at Question 1: customer said YES to "
+                             "the first question. " + reasoning).strip()
+                rule_applied = rule_applied + "+first_question_yes"
 
             # Sync Call disposition
             if opt_out:
@@ -266,6 +280,7 @@ Return ONLY a valid JSON object with these exact keys:
                     "signals": signals,
                     "rule_applied": rule_applied,
                     "analyzer": "gemini",
+                    "first_question_yes": first_q_yes,
                     "customer_info": customer_info,
                     "why_interested": why_interested,
                     "why_not_interested": why_not_interested,
@@ -355,6 +370,9 @@ Return ONLY a valid JSON object with these exact keys:
                     diag.classification in (IntentClassification.INTERESTED, IntentClassification.NEEDS_INFORMATION)
                     or diag.binary_classification == "INTERESTED"
                 )
+                # First-question YES policy (opt-out below still wins).
+                if first_q_yes and not diag.opt_out_detected:
+                    is_interested = True
                 confidence = float(diag.confidence)
 
                 # Determine disposition and handle opt-out suppression
@@ -396,6 +414,7 @@ Return ONLY a valid JSON object with these exact keys:
                         "signals": diag.signals_detected,
                         "rule_applied": diag.rule_applied,
                         "analyzer": "rule_engine",
+                        "first_question_yes": first_q_yes,
                         "customer_info": customer_info,
                         "why_interested": why_interested,
                         "why_not_interested": why_not_interested,

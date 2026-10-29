@@ -147,5 +147,56 @@ class TestExports(unittest.TestCase):
             self.assertIn("Rohit Sharma", text)
 
 
+class TestFirstQuestionYes(unittest.TestCase):
+    """Client policy (2026-10-29): a YES to the FIRST question shortlists
+    the lead immediately — the old scoring counted a bare 'yes' as a weak
+    +1 cue, so Q1-yes callers were never shortlisted."""
+
+    def test_yes_to_first_question_shortlists(self):
+        text = (
+            "Agent: नमस्कार, मी Sunrise कडून बोलत आहे. आपल्याला माहिती ऐकायला आवडेल का?\n"
+            "Customer: हो\n"
+            "Agent: आपल्याकडे किती एकर जमीन आहे?\n"
+            "Customer: पाच एकर आहे\n"
+        )
+        r = analyze_transcript(text)
+        self.assertTrue(r["first_question_yes"])
+        self.assertEqual(r["classification"], "INTERESTED")
+        self.assertEqual(r["binary"], "INTERESTED")
+        self.assertEqual(r["why_interested"][0]["code"], "first_question_yes")
+
+    def test_english_yes_first_answer_shortlists(self):
+        text = (
+            "Agent: Hello, are you interested in our course?\n"
+            "Customer: Yes\n"
+            "Agent: Do you have prior experience?\n"
+            "Customer: A little bit\n"
+        )
+        r = analyze_transcript(text)
+        self.assertTrue(r["first_question_yes"])
+        self.assertEqual(r["classification"], "INTERESTED")
+
+    def test_opt_out_later_overrides_first_yes(self):
+        text = (
+            "Agent: नमस्कार, आपल्याला माहिती ऐकायला आवडेल का?\n"
+            "Customer: हो\n"
+            "Agent: ठीक आहे, पुढचा प्रश्न विचारते\n"
+            "Customer: नाही थांबा, परत फोन करू नका\n"
+        )
+        r = analyze_transcript(text)
+        self.assertFalse(r["first_question_yes"])
+        self.assertEqual(r["classification"], "NOT_INTERESTED")
+
+    def test_no_to_first_question_not_shortlisted(self):
+        text = (
+            "Agent: Are you interested in our course?\n"
+            "Customer: No, I already have one\n"
+            "Agent: Okay, thank you\n"
+        )
+        r = analyze_transcript(text)
+        self.assertFalse(r["first_question_yes"])
+        self.assertNotEqual(r["classification"], "INTERESTED")
+
+
 if __name__ == "__main__":
     unittest.main()

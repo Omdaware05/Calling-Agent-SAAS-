@@ -80,8 +80,12 @@ async def test_fast_orchestrator_turn_0_greeting_and_identity_faqs():
         {"role": "user", "content": "Hello, kaun bol raha hai?"}
     ]
     reply0 = FastQuestionnaireOrchestrator.resolve_next_turn(messages_turn0)
-    # Turn 0 must return None so the role prompt & instructions go to LLM to create dynamic greeting!
-    assert reply0 is None
+    # Changed 2026-10-29: Turn 0 no longer defers to the slow LLM (that was
+    # the "welcome speech initiates late" + "repeated questions" complaint).
+    # The identity question is answered instantly, with Q1 appended.
+    assert reply0 is not None
+    assert "Aarti" in reply0
+    assert "क्या आप कॉलेज के छात्र हैं या वर्किंग प्रोफेशनल?" in reply0
 
     # Turn 0 (Standard pickup): Caller says "Hello / Haan boliye"
     messages_pickup = [
@@ -89,7 +93,9 @@ async def test_fast_orchestrator_turn_0_greeting_and_identity_faqs():
         {"role": "user", "content": "Haan boliye"}
     ]
     reply_pickup = FastQuestionnaireOrchestrator.resolve_next_turn(messages_pickup)
-    assert reply_pickup is None
+    # Q1 is served instantly and deterministically right after the greeting.
+    assert reply_pickup is not None
+    assert "क्या आप कॉलेज के छात्र हैं या वर्किंग प्रोफेशनल?" in reply_pickup
 
     # LLM dynamically creates opening greeting & introduces Question 1 based on role prompt & system instructions
     llm_generated_opening = "नमस्ते जी! मैं EduTech Pro Global से Aarti बात कर रही हूँ। क्या आप कॉलेज के छात्र हैं या वर्किंग प्रोफेशनल?"

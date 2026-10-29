@@ -88,24 +88,82 @@ class FastQuestionnaireOrchestrator:
             return False
         return bool(cls.REFUSAL_PATTERN.search(text.strip()))
 
+    # Words that carry no question identity (honorifics, fillers, auxiliaries).
+    # Dropped before token-overlap matching so paraphrases still match.
+    _MATCH_STOPWORDS = {
+        "साहेब", "जी", "sir", "madam", "the", "a", "an", "का", "की", "के",
+        "आहे", "आहेत", "है", "हैं", "हो", "का?", "तुम्ही", "आपण", "आप",
+    }
+
+    @classmethod
+    def _normalize_for_match(cls, text: str) -> str:
+        """Lowercase, strip punctuation and collapse whitespace so the text
+        the caller actually HEARD (TTS-cleaned, ack-prefixed, honorifics
+        added/removed) can be matched against the scripted question text."""
+        t = (text or "").lower()
+        t = re.sub(r"[।.!?,;:\"'()\[\]{}<>*`_#\-–—/\\]+", " ", t)
+        return re.sub(r"\s+", " ", t).strip()
+
+    @classmethod
+    def _question_was_asked(cls, q_text: str, msg_norm: str, msg_tokens: set) -> bool:
+        """True if this scripted question was already spoken in `msg_norm`.
+
+        Two complementary checks (the old code only did a raw 35-char prefix
+        substring, so ANY LLM paraphrase of a question became invisible and
+        the question was re-asked — the 'repeated questions' complaint):
+        1. normalized full-text / leading-core substring;
+        2. token overlap: >= 60% of the question's content tokens appear in
+           the message (paraphrase-tolerant, still question-specific).
+        """
+        q_norm = cls._normalize_for_match(q_text)
+        if not q_norm:
+            return False
+        if q_norm in msg_norm:
+            return True
+        core = q_norm[:40]
+        if len(core) >= 12 and core in msg_norm:
+            return True
+        q_tokens = {t for t in q_norm.split() if len(t) >= 2 and t not in cls._MATCH_STOPWORDS}
+        if len(q_tokens) >= 3:
+            overlap = len(q_tokens & msg_tokens) / len(q_tokens)
+            if overlap >= 0.6:
+                return True
+        return False
+
+    @classmethod
+    def asked_question_indices(
+        cls, questions: List[Dict[str, Any]], assistant_messages: List[str]
+    ) -> set:
+        """Set of question indices already spoken in ANY assistant message."""
+        asked = set()
+        for msg in assistant_messages:
+            msg_norm = cls._normalize_for_match(msg)
+            if not msg_norm:
+                continue
+            msg_tokens = set(msg_norm.split())
+            for q in questions:
+                if q["index"] not in asked and cls._question_was_asked(q["text"], msg_norm, msg_tokens):
+                    asked.add(q["index"])
+        return asked
+
     @classmethod
     def find_last_question_asked(
         cls, questions: List[Dict[str, Any]], assistant_messages: List[str]
     ) -> Optional[int]:
-        """
-        Scans assistant messages from newest to oldest to find the highest question index
-        that the assistant has already asked the caller.
-        """
-        for msg in reversed(assistant_messages):
-            msg_clean = msg.strip().lower()
-            # Match by question text substring
-            for q in reversed(questions):
-                q_text_core = q["text"].strip().lower()
-                # Remove common prefixes like 'साहेब,' or 'नमस्कार' to compare core question
-                core_sub = q_text_core[:35] if len(q_text_core) > 35 else q_text_core
-                if core_sub in msg_clean:
-                    return q["index"]
+        """Highest question index the assistant has already asked (or None)."""
+        asked = cls.asked_question_indices(questions, assistant_messages)
+        return max(asked) if asked else None
 
+    @classmethod
+    def next_unasked_question(
+        cls, questions: List[Dict[str, Any]], asked: set
+    ) -> Optional[Dict[str, Any]]:
+        """First question (in script order) that has NOT been asked yet.
+        Advancing to the first unasked question — instead of last+1 — means a
+        question can never be repeated and never silently skipped."""
+        for q in sorted(questions, key=lambda x: x["index"]):
+            if q["index"] not in asked:
+                return q
         return None
 
     @classmethod
@@ -165,13 +223,17 @@ class FastQuestionnaireOrchestrator:
                 return "जी कोई बात नहीं, आपका बहुत-बहुत धन्यवाद।"
             return "No problem at all, thank you very much for your time. Have a wonderful day!"
 
-        # Determine which question was previously asked
-        last_q_idx = cls.find_last_question_asked(questions, assistant_msgs)
+        # Determine which questions were already asked (paraphrase-tolerant).
+        asked_indices = cls.asked_question_indices(questions, assistant_msgs)
+        last_q_idx = max(asked_indices) if asked_indices else None
 
-        # TURN 0 (Opening / Greeting): Must get to LLM to generate greeting & response dynamically from role prompt & instructions
-        if last_q_idx is None:
-            logger.info("FastQuestionnaireEngine: Turn 0 (Opening/Greeting) -> Passing to LLM to generate response from role prompt & system instructions")
-            return None
+        # NOTE: there is deliberately no "Turn 0 -> LLM" bail any more. The
+        # static greeting is spoken by the start node; the caller's first
+        # reply used to fall through to the slow LLM, which paraphrased Q1 —
+        # and because the paraphrase could not be recognised later, Q1 was
+        # then re-asked verbatim (the 'welcome is slow' + 'repeated
+        # questions' complaints). Now the flow below deterministically
+        # serves the first unasked question (Q1) on that turn too.
 
         # 5. Check for Reschedule / Busy Right Now
         if any(kw in last_user_lower for kw in ["busy hu", "busy ahe", "call later", "call back", "nantar kara", "nantar phone", "bad me phone", "meeting me hu"]):
@@ -191,7 +253,7 @@ class FastQuestionnaireOrchestrator:
                 return "जी बिल्कुल, कॉल समाप्त होते ही आपके इस नंबर पर संपूर्ण जानकारी WhatsApp कर दी जाएगी। क्या हम आगे बात कर सकते हैं?"
             return "Certainly! We will share complete details on your WhatsApp right after this call. May we proceed?"
 
-        next_q_obj = next((q for q in questions if q["index"] == last_q_idx + 1), None)
+        next_q_obj = cls.next_unasked_question(questions, asked_indices)
         active_q_text = next_q_obj["text"] if next_q_obj else None
 
         # 7. Check for Agent Identity Inquiries ("Who are you? / Aap kaun?")
@@ -238,13 +300,15 @@ class FastQuestionnaireOrchestrator:
                             return f"जी, {exp_ans}।"
                         return f"Regarding that, {exp_ans}."
 
-        # 12. Customer answered Question `last_q_idx` -> Advance to next question
-        next_q_idx = last_q_idx + 1
-        next_question_obj = next((q for q in questions if q["index"] == next_q_idx), None)
+        # 12. Advance to the FIRST question that has not been asked yet.
+        # (When nothing was asked yet — e.g. the caller just replied to the
+        # opening greeting — this serves Q1 instantly and deterministically
+        # instead of paying a slow LLM round-trip.)
+        next_question_obj = cls.next_unasked_question(questions, asked_indices)
 
         if next_question_obj:
             next_q_text = next_question_obj["text"]
-            logger.info(f"FastQuestionnaireEngine: Answered Q{last_q_idx} -> Advancing to Q{next_q_idx}: '{next_q_text}'")
+            logger.info(f"FastQuestionnaireEngine: Asked so far={sorted(asked_indices)} -> Serving Q{next_question_obj['index']}: '{next_q_text}'")
 
             if script_lang == "mr":
                 ack_prefix = "समजले साहेब. "
