@@ -221,7 +221,6 @@ async def start_calls(
             tenant_id=agent.tenant_id,
             agent_id=agent.id,
             phone_number=norm_phone,
-            caller_number=getattr(agent, "telephony_from_number", None) or settings.VOBIZ_FROM_NUMBER or "+918065354620",
             status="queued",
             disposition="queued",
             direction="outbound",
@@ -229,6 +228,7 @@ async def start_calls(
                 "provider": request.provider or getattr(agent, "telephony_provider", None) or "vobiz",
                 "language": request.language or agent.default_language or "English",
                 "questionnaire_id": request.questionnaire_id,
+                "caller_id": getattr(agent, "telephony_from_number", None) or settings.VOBIZ_FROM_NUMBER or "+918065354620",
             },
         )
         db.add(call)
