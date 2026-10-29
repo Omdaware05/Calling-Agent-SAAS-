@@ -8,9 +8,14 @@ FIXED (backend side):
 - Customer-info extraction did not exist end to end → `model/transcript_analyzer.py` now extracts name/phone/email/city/budget/callback-time and `lead_intelligence_service.py` stores it on the analysis + Lead (Lead `name`/`email` columns are now filled).
 - No server-side Excel of leads with why-reasons → `GET /api/leads/export.xlsx?status=interested|not_interested` added.
 
-STILL OPEN (frontend side — listed in full below):
-- The UI still does not display the extracted name/email/city/budget or the why-interested / why-not reason lists (LeadsPage shows one truncated reasoning line; `LeadDocument` type lacks name/email/metadata).
-- There is still no Not-Interested list/count/export view in the UI (backend deletes not-interested leads by design), no DNC list, no status filter on the Leads page, and the dead/broken items in section 2 are untouched.
+FIXED (frontend, 2026-10-29 Leads UI update):
+- LeadsPage now displays the extracted name/email/city/budget/callback time in a "Customer (from call)" column and the why-interested / why-not reasons as hoverable chips (evidence in the tooltip) in a "Why — AI Reasons" column; `LeadDocument` declares name/email/metadata.
+- LeadsPage has a status filter (All / Interested / Not Interested / New / Qualified / Closed), an "Excel (Server)" button wired to `GET /api/leads/export.xlsx`, richer client-side export columns, search over name/email/city, the fetch cap raised to 500, and the edit-modal status vocabulary now matches the backend.
+- Not-interested leads present in the database are now visible/filterable in the UI.
+
+STILL OPEN:
+- The backend still deletes / never creates a Lead for not-interested calls during analysis (`lead_intelligence_service.py`), so in production not-interested rows usually won't exist to display — changing that is a product decision (it also affects the DNC flow).
+- There is still no DNC list UI, and the dead/broken items in section 2 are untouched.
 
 ---
 

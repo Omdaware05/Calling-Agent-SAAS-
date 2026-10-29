@@ -375,16 +375,53 @@ export interface CsvImportResponse {
   errors: CsvImportError[];
 }
 
+/** One categorized reason from the offline transcript analyzer, with the
+ * customer's exact words as evidence. */
+export interface LeadReason {
+  code?: string;
+  reason: string;
+  evidence?: string;
+}
+
+/** Customer details the transcript analyzer extracted from the call. */
+export interface LeadCustomerInfo {
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  city?: string | null;
+  budget_inr?: number | null;
+  budget_raw?: string | null;
+  product_interest?: string | null;
+  business_type?: string | null;
+  preferred_callback_time?: string | null;
+}
+
+export interface LeadMetadata {
+  classification?: string;
+  interest_strength?: string;
+  signals?: string[];
+  customer_info?: LeadCustomerInfo;
+  why_interested?: LeadReason[];
+  why_not_interested?: LeadReason[];
+  [key: string]: any;
+}
+
 export interface LeadDocument {
   lead_id: string;
   call_id: string;
   agent_id?: string | null;
   contact_id?: string | null;
+  name?: string | null;
   phone_number: string;
+  email?: string | null;
   confidence_score: number;
+  score?: number;
   reasoning?: string | null;
-  status: string; // 'new', 'contacted', 'qualified', 'converted', 'closed'
+  // Backend vocabulary (models/lead.py): 'new', 'interested',
+  // 'not_interested', 'qualified', 'closed'
+  status: string;
   notes?: string | null;
+  metadata?: LeadMetadata | null;
   created_at: string;
   updated_at: string;
 }

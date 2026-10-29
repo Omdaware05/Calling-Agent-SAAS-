@@ -13,7 +13,7 @@ import { useToast } from '../../app/providers/ToastProvider';
 import { useBusiness } from '../../app/providers/BusinessProvider';
 import { getErrorMessage } from '../../services/api/client';
 import { LeadDocument } from '../../types/api';
-import { Target, Eye, RefreshCw, CheckCircle, Building2 } from 'lucide-react';
+import { Target, Eye, RefreshCw, CheckCircle, Building2, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { TimeFilterAndExport } from '../../components/ui/TimeFilterAndExport';
 import { exportToExcel, filterByDateRange, TimeFilterRange } from '../../utils/excelExport';
@@ -28,6 +28,8 @@ export const LeadsPage: React.FC = () => {
   const [leadStatus, setLeadStatus] = useState('new');
   const [leadNotes, setLeadNotes] = useState('');
   const [timeRange, setTimeRange] = useState<TimeFilterRange>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const { data: leads = [], isLoading, refetch } = useQuery({
     queryKey: ['leads'],
@@ -35,28 +37,56 @@ export const LeadsPage: React.FC = () => {
     refetchInterval: 3000,
   });
 
-  // Filter leads for selected business and date range
+  // Filter leads for selected business, pipeline status and date range
   const displayLeads = React.useMemo(() => {
     let result = leads;
     if (!isAllBusinesses && selectedBusiness) {
       const agentIds = new Set(selectedBusiness.assignedAgentIds);
       result = result.filter((l) => !l.agent_id || agentIds.has(l.agent_id));
     }
+    if (statusFilter !== 'all') {
+      result = result.filter((l) => (l.status || 'new').toLowerCase() === statusFilter);
+    }
     return filterByDateRange(result, (l) => l.created_at, timeRange);
-  }, [leads, selectedBusiness, isAllBusinesses, timeRange]);
+  }, [leads, selectedBusiness, isAllBusinesses, timeRange, statusFilter]);
 
   const handleExportExcel = () => {
-    const exportRows = displayLeads.map((l) => ({
-      'Lead ID': l.lead_id,
-      'Prospect Phone': l.phone_number,
-      'Pipeline Status': l.status || 'new',
-      'Confidence Score': `${Math.round(((l.confidence_score !== undefined && l.confidence_score !== null) ? l.confidence_score : ((l as any).score ?? 0)) * 100)}%`,
-      'Reasoning': l.reasoning || l.notes || 'N/A',
-      'Call ID': l.call_id || 'N/A',
-      'Agent ID': l.agent_id || 'N/A',
-      'Captured At': l.created_at ? format(new Date(l.created_at), 'yyyy-MM-dd HH:mm:ss') : 'N/A',
-    }));
-    exportToExcel(exportRows, `voxora_leads_pipeline_${timeRange}_${format(new Date(), 'yyyyMMdd')}`, 'Leads Pipeline');
+    const exportRows = displayLeads.map((l) => {
+      const ci = l.metadata?.customer_info || {};
+      const reasonsText = (items?: { reason: string; evidence?: string }[]) =>
+        (items || []).map((r) => `${r.reason} — "${r.evidence || ''}"`).join('; ');
+      return {
+        'Lead ID': l.lead_id,
+        'Customer Name': l.name || ci.name || 'N/A',
+        'Prospect Phone': l.phone_number,
+        'Email': l.email || ci.email || 'N/A',
+        'City': ci.city || 'N/A',
+        'Budget (INR)': ci.budget_inr ?? 'N/A',
+        'Pipeline Status': l.status || 'new',
+        'Confidence Score': `${Math.round(((l.confidence_score !== undefined && l.confidence_score !== null) ? l.confidence_score : ((l as any).score ?? 0)) * 100)}%`,
+        'Why Interested': reasonsText(l.metadata?.why_interested) || 'N/A',
+        'Why Not Interested': reasonsText(l.metadata?.why_not_interested) || 'N/A',
+        'Reasoning': l.reasoning || l.notes || 'N/A',
+        'Call ID': l.call_id || 'N/A',
+        'Agent ID': l.agent_id || 'N/A',
+        'Captured At': l.created_at ? format(new Date(l.created_at), 'yyyy-MM-dd HH:mm:ss') : 'N/A',
+      };
+    });
+    exportToExcel(exportRows, `voxora_leads_pipeline_${statusFilter}_${timeRange}_${format(new Date(), 'yyyyMMdd')}`, 'Leads Pipeline');
+  };
+
+  // Server-side workbook (includes extracted customer info + why-reasons
+  // for ALL matching leads, not just the rows loaded on this page).
+  const handleDownloadServerExcel = async () => {
+    setIsDownloading(true);
+    try {
+      await leadsApi.downloadLeadsExcel(statusFilter !== 'all' ? statusFilter : undefined);
+      toast.success('Excel Downloaded', `Leads workbook (${statusFilter === 'all' ? 'all statuses' : statusFilter}) saved.`);
+    } catch (err) {
+      toast.error('Excel download failed', getErrorMessage(err));
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const updateMutation = useMutation({
@@ -108,6 +138,30 @@ export const LeadsPage: React.FC = () => {
       ),
     },
     {
+      key: 'customer',
+      header: 'Customer (from call)',
+      render: (lead) => {
+        const ci = lead.metadata?.customer_info || {};
+        const name = lead.name || ci.name;
+        const email = lead.email || ci.email;
+        const extras = [
+          ci.city,
+          ci.budget_inr ? `₹${ci.budget_inr.toLocaleString('en-IN')}` : null,
+          ci.preferred_callback_time ? `↩ ${ci.preferred_callback_time}` : null,
+        ].filter(Boolean).join(' · ');
+        if (!name && !email && !extras) {
+          return <span className="text-xs text-slate-400">Not stated on call</span>;
+        }
+        return (
+          <div className="flex flex-col max-w-[190px]">
+            {name && <span className="font-semibold text-xs text-slate-900 dark:text-slate-100 truncate">{name}</span>}
+            {email && <span className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">{email}</span>}
+            {extras && <span className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">{extras}</span>}
+          </div>
+        );
+      },
+    },
+    {
       key: 'client_attribution',
       header: 'Client Business',
       render: (lead) => {
@@ -149,24 +203,49 @@ export const LeadsPage: React.FC = () => {
       render: (lead) => {
         const s = lead.status?.toLowerCase() || 'new';
         const type =
-          s === 'converted'
+          s === 'interested' || s === 'qualified'
             ? 'success'
-            : s === 'qualified'
-            ? 'active'
-            : s === 'contacted'
-            ? 'pending'
-            : 'neutral';
-        return <StatusIndicator status={type} label={lead.status || 'New'} />;
+            : s === 'not_interested'
+            ? 'danger'
+            : s === 'closed'
+            ? 'inactive'
+            : 'pending';
+        const label = s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        return <StatusIndicator status={type} label={label} />;
       },
     },
     {
       key: 'reasoning',
-      header: 'Notes & AI Context',
-      render: (lead) => (
-        <p className="text-xs text-slate-600 dark:text-zinc-400 line-clamp-1 max-w-xs">
-          {lead.reasoning || lead.notes || 'Identified via post-call intent classifier.'}
-        </p>
-      ),
+      header: 'Why — AI Reasons',
+      render: (lead) => {
+        const whyIn = lead.metadata?.why_interested || [];
+        const whyNot = lead.metadata?.why_not_interested || [];
+        const chip = (
+          r: { reason: string; evidence?: string },
+          cls: string,
+        ) => (
+          <span
+            key={r.reason}
+            title={r.evidence ? `Customer said: "${r.evidence}"` : undefined}
+            className={`inline-block px-1.5 py-0.5 rounded-md text-[10px] font-medium leading-tight ${cls}`}
+          >
+            {r.reason}
+          </span>
+        );
+        return (
+          <div className="flex flex-col gap-1 max-w-[300px]">
+            {(whyIn.length > 0 || whyNot.length > 0) && (
+              <div className="flex flex-wrap gap-1">
+                {whyIn.map((r) => chip(r, 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'))}
+                {whyNot.map((r) => chip(r, 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'))}
+              </div>
+            )}
+            <p className="text-xs text-slate-600 dark:text-zinc-400 line-clamp-2">
+              {lead.reasoning || lead.notes || 'No reason recorded for this lead yet.'}
+            </p>
+          </div>
+        );
+      },
     },
     {
       key: 'actions',
@@ -200,14 +279,28 @@ export const LeadsPage: React.FC = () => {
     <div className="space-y-6">
       <PageHeader
         category={isAllBusinesses ? 'CRM & Pipeline' : `Leads: ${selectedBusiness?.name}`}
-        title="Interested Leads Pipeline"
+        title="Leads Pipeline"
         subtitle={
           isAllBusinesses
-            ? 'Qualified prospective customers captured by AI voice telecallers across all client businesses.'
-            : `Qualified prospective customer leads captured for ${selectedBusiness?.name}.`
+            ? 'Every lead captured by AI voice telecallers — with the customer details and the reason (interested or not) extracted from each call.'
+            : `Customer leads captured for ${selectedBusiness?.name}, with call-extracted details and AI reasons.`
         }
         actions={
           <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="w-44">
+              <Select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                aria-label="Filter leads by status"
+              >
+                <option value="all">All Statuses</option>
+                <option value="interested">Interested</option>
+                <option value="not_interested">Not Interested</option>
+                <option value="new">New</option>
+                <option value="qualified">Qualified</option>
+                <option value="closed">Closed</option>
+              </Select>
+            </div>
             <TimeFilterAndExport
               timeRange={timeRange}
               onTimeRangeChange={setTimeRange}
@@ -215,6 +308,15 @@ export const LeadsPage: React.FC = () => {
               filteredCount={displayLeads.length}
               label="Export Leads"
             />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadServerExcel}
+              isLoading={isDownloading}
+              leftIcon={<Download className="w-3.5 h-3.5 text-slate-400" />}
+            >
+              Excel (Server)
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -232,10 +334,10 @@ export const LeadsPage: React.FC = () => {
         data={displayLeads}
         isLoading={isLoading}
         keyExtractor={(l) => l.lead_id}
-        searchPlaceholder="Filter leads by phone or status..."
-        searchableKey={(l) => `${l.phone_number} ${l.status || ''} ${l.reasoning || ''}`}
+        searchPlaceholder="Filter leads by phone, name, email or status..."
+        searchableKey={(l) => `${l.phone_number} ${l.status || ''} ${l.reasoning || ''} ${l.name || ''} ${l.email || ''} ${l.metadata?.customer_info?.city || ''}`}
         emptyTitle="No leads captured yet"
-        emptyDescription="Calls classified with high customer interest will automatically appear here."
+        emptyDescription="Analyzed calls will automatically appear here as leads, with their extracted customer details and reasons."
         pageSize={10}
       />
 
@@ -254,9 +356,9 @@ export const LeadsPage: React.FC = () => {
             onChange={(e) => setLeadStatus(e.target.value)}
           >
             <option value="new">New Opportunity</option>
-            <option value="contacted">Contacted</option>
+            <option value="interested">Interested</option>
+            <option value="not_interested">Not Interested</option>
             <option value="qualified">Sales Qualified</option>
-            <option value="converted">Successfully Converted</option>
             <option value="closed">Closed / Disqualified</option>
           </Select>
 
