@@ -235,18 +235,19 @@ class SarvamTelephonyService:
             "बाद में बात", "बाद में करो", "अभी बिजी", "बिजी हूँ", "व्यस्त हूँ", "गलत नंबर", "रॉन्ग नंबर",
             "not interested", "no thanks", "don't call", "cut the call", "cut it", "hang up",
             "stop calling", "wrong number", "busy right now", "call later", "bye", "अलविदा",
-            "बंद करो", "रख दीजिए", "नही चाहिए", "काट दिजिये", "काट दीजिये", "काट"
+            "बंद करो", "रख दीजिए", "नही चाहिए", "काट दिजिये", "काट दीजिये", "काट",
+            "नको", "नाही", "नको मला", "काही नको", "रुचि नहीं", "इंटरेस्ट नहीं", "नॉट इंटरेस्टेड",
+            "nahi chahiye", "nahi lena", "nahi re", "nahi bhai", "no need", "not needed",
+            "interest nahi", "nahi hai", "not really"
         ]
         if any(k in t for k in refusal_keywords):
             return True
 
         # Standalone negative response words
         clean_words = [w.strip("।,?!.") for w in t.split()]
-        if clean_words in (
-            ["नहीं"], ["नहीं", "नहीं"], ["नहीं", "नहीं", "नहीं"],
-            ["no"], ["no", "no"], ["no", "no", "no"],
-            ["ना"], ["ना", "ना"], ["नही"], ["नही", "नही"]
-        ):
+        if any(w in [
+            "नहीं", "नही", "ना", "no", "nahi", "nahin", "nope", "not", "nako", "नाही", "नको"
+        ] for w in clean_words[:2]):
             return True
 
         return False
@@ -646,30 +647,60 @@ class SarvamTelephonyService:
         comp_desc = getattr(agent, "company_description", None) or agent.purpose or "Customer Assistance"
         voice_id = getattr(agent, "voice_id", None) or self.default_voice
 
-        # Determine instant opening greeting
+        # Determine selected language & dialect
+        agent_lang = (getattr(agent, "default_language", None) or getattr(agent, "primary_language", None) or "Hindi").lower()
+        if "marathi" in agent_lang or "mr" in agent_lang:
+            lang_code = "mr-IN"
+            lang_name = "Marathi"
+            default_greeting = f"नमस्कार, मी {comp_name} कडून {agent_name} बोलत आहे. तुम्हाला आमच्या सेवेमध्ये इंटरेस्ट आहे का?"
+            farewell_reply = "ठीक आहे, वेळ दिल्याबद्दल धन्यवाद! नमस्कार."
+            interest_followup = "खूप छान! सांगा, तुम्हाला कोणती माहिती हवी आहे?"
+        elif "english" in agent_lang or "en" in agent_lang:
+            lang_code = "en-IN"
+            lang_name = "English"
+            default_greeting = f"Hello! This is {agent_name} from {comp_name}. Are you interested in our services?"
+            farewell_reply = "Alright, thank you for your time! Have a great day."
+            interest_followup = "Great! Please let me know what information you need."
+        elif "gujarati" in agent_lang or "gu" in agent_lang:
+            lang_code = "gu-IN"
+            lang_name = "Gujarati"
+            default_greeting = f"નમસ્તે, હું {comp_name} માંથી {agent_name} વાત કરું છું. શું તમે અમારી સેવામાં રસ ધરાવો છો?"
+            farewell_reply = "ઠીક છે, સમય આપવા બદલ આભાર! નમસ્તે."
+            interest_followup = "ખૂબ સરસ! જણાવો તમે કઈ માહિતી ઈચ્છો છો?"
+        else:  # Default Hindi
+            lang_code = "hi-IN"
+            lang_name = "Hindi"
+            default_greeting = f"नमस्कार जी, मैं {comp_name} से {agent_name} बात कर रहा हूँ। क्या आप हमारी सेवाओं में इंटरेस्टेड हैं?"
+            farewell_reply = "जी ठीक है, समय देने के लिए आपका बहुत धन्यवाद! नमस्कार।"
+            interest_followup = "बहुत बढ़िया! बताइए आप किस सेवा या सहायता के बारे में जानना चाहते हैं?"
+
+        # Every agent greets customer and asks if they are interested or not in selected language
         greeting = (getattr(agent, "greeting_message", None) or "").strip()
         if not greeting:
-            desc_lower = (comp_desc or "").lower()
-            if any(k in desc_lower for k in ["admission", "student", "course", "college", "school", "education"]):
-                greeting = f"नमस्कार जी, मैं {comp_name} से {agent_name} बात कर रहा हूँ। क्या आप एडमिशन और कोर्स की जानकारी चाहते हैं?"
-            elif any(k in desc_lower for k in ["broadband", "internet", "wifi", "network"]):
-                greeting = f"नमस्ते! मैं {comp_name} से {agent_name} बोल रहा हूँ। बताइए, क्या आपके इंटरनेट कनेक्शन में कोई समस्या आ रही है?"
-            elif any(k in desc_lower for k in ["agri", "kisan", "crop", "farming"]):
-                greeting = f"नमस्कार किसान भाई, मैं {comp_name} से {agent_name} बात कर रहा हूँ। क्या मैं आपकी फसलों के बारे में जानकारी ले सकता हूँ?"
-            else:
-                greeting = f"नमस्कार जी, मैं {comp_name} से {agent_name} बात कर रहा हूँ। क्या मैं आपसे दो मिनट बात कर सकता हूँ?"
+            greeting = default_greeting
+        else:
+            has_interest_q = any(k in greeting.lower() for k in [
+                "interested", "interest", "रुचि", "इंटरेस्टेड", "इंटरेस्ट", "स्वारस्य", "रस", "चाहते हैं", "चाहते हो"
+            ])
+            if not has_interest_q:
+                if "mr" in lang_code:
+                    greeting = f"{greeting.rstrip('।,?!.')}. तुम्हाला आमच्या सेवेमध्ये इंटरेस्ट आहे का?"
+                elif "en" in lang_code:
+                    greeting = f"{greeting.rstrip('।,?!.')}. Are you interested in our services?"
+                else:
+                    greeting = f"{greeting.rstrip('।,?!.')}। क्या आप हमारी सेवाओं में इंटरेस्टेड हैं?"
 
         system_prompt = (
             f"You are '{agent_name}', a helpful and polite AI Voice Calling Assistant representing '{comp_name}'.\n"
             f"Company / Purpose: {comp_desc}\n\n"
             f"INSTRUCTIONS & SCRIPT:\n{agent.instructions or agent.system_prompt or ''}\n\n"
             f"RULES FOR CONVERSATIONAL PHONE CALL:\n"
-            f"1. Spoken Conversational Hindi: Respond in natural spoken Hindi in Devanagari script. Never use English script (Roman letters) or markdown.\n"
+            f"1. Spoken Language: Respond naturally in {lang_name} ({lang_code}). Never use English roman script for Indic languages or markdown.\n"
             f"2. Strict 1 Short Sentence: Keep replies strictly under 15 words total. Never give long speeches.\n"
-            f"3. PROGRESSION ONLY - NEVER REPEAT: Never repeat a question or sentence you have already said in this conversation. If customer answers or says 'हाँ'/'जी', proceed directly to the next step.\n"
-            f"4. If caller answers 'हाँ' or 'हाँजी' or 'yes': They are interested! Say: 'बहुत बढ़िया! बताइए आप किस सेवा या सहायता के बारे में जानना चाहते हैं?'\n"
-            f"5. If caller says 'ठीक है', 'okay', 'थैंक यू', 'धन्यवाद', or concludes: Say 'जी बहुत-बहुत धन्यवाद! आपका दिन शुभ हो, नमस्कार।' and do not ask any further questions.\n"
-            f"6. If caller declines, says no, says not interested, or asks to cut the call ('नहीं', 'कट कर दो', 'नहीं चाहिए', 'not interested'): Say ONLY 'जी ठीक है, आपका बहुत धन्यवाद! नमस्कार।' and conclude immediately."
+            f"3. PROGRESSION ONLY - NEVER REPEAT: Never repeat a question you already asked. If customer confirmed interest, proceed directly to details.\n"
+            f"4. If customer says 'हाँ' / 'yes' / 'बताइए' / agrees: Say: '{interest_followup}'\n"
+            f"5. If customer says 'नहीं' / 'no' / 'not interested' / declines: Say ONLY '{farewell_reply}' and stop.\n"
+            f"6. Concluding: If customer says 'ठीक है' or 'thank you', say '{farewell_reply}'."
         )
 
         conversation_history: List[Dict[str, str]] = []
@@ -686,7 +717,7 @@ class SarvamTelephonyService:
 
         # Pre-synthesize opening greeting immediately so it's ready in memory for instant playback when user speaks
         logger.info(f"[SarvamTelephony] Pre-synthesizing greeting: '{greeting}'")
-        greeting_mulaw = await self.synthesize_speech(greeting, voice=voice_id)
+        greeting_mulaw = await self.synthesize_speech(greeting, voice=voice_id, language_code=lang_code)
 
         # State tracking for real-time bidirectional loop
         stream_id: Optional[str] = None
@@ -758,12 +789,11 @@ class SarvamTelephonyService:
 
             # Check if caller refused, declined, or requested call disconnection
             if self.is_refusal_or_call_termination(user_text):
-                logger.info(f"[SarvamTelephony] Refusal/Hangup requested by caller: '{user_text}'. Concluding call {call_id} immediately.")
-                farewell_reply = "जी ठीक है, समय देने के लिए आपका बहुत धन्यवाद! नमस्कार।"
+                logger.info(f"[SarvamTelephony] Caller declined / said NO: '{user_text}'. Concluding and cutting call {call_id} immediately.")
                 conversation_history.append({"role": "assistant", "content": farewell_reply})
 
                 farewell_start = time.time()
-                farewell_mulaw = await self.synthesize_speech(farewell_reply, voice=voice_id)
+                farewell_mulaw = await self.synthesize_speech(farewell_reply, voice=voice_id, language_code=lang_code)
                 if farewell_mulaw:
                     await play_audio_task(farewell_mulaw)
                     await asyncio.sleep(1.2)
@@ -925,7 +955,29 @@ class SarvamTelephonyService:
                         or msg.get("streamId")
                         or call_id
                     )
-                    logger.info(f"[SarvamTelephony] VoBiz start event received. Captured streamId: {stream_id}. Waiting for caller speech before greeting...")
+                    logger.info(f"[SarvamTelephony] Call connected (streamId: {stream_id}). Immediately playing pre-loaded opening greeting...")
+                    if not greeting_delivered and greeting_mulaw:
+                        greeting_delivered = True
+                        greeting_started_time = time.time()
+                        current_turn_task = asyncio.create_task(play_audio_task(greeting_mulaw))
+                        conversation_history.append({"role": "assistant", "content": greeting})
+                        async with AsyncSessionLocal() as session:
+                            stmt = select(Transcript).where(Transcript.call_id == call_id)
+                            tr = (await session.execute(stmt)).scalar_one_or_none()
+                            if tr:
+                                session.add(
+                                    TranscriptSegment(
+                                        transcript_id=tr.id,
+                                        speaker="agent",
+                                        text=greeting,
+                                        start_time=0.0,
+                                        end_time=round(time.time() - call_start_time + 3.0, 2),
+                                        sequence=sequence_counter,
+                                        confidence=1.0,
+                                    )
+                                )
+                                await session.commit()
+                        sequence_counter += 1
 
                 elif event == "media":
                     now = time.time()
@@ -933,31 +985,30 @@ class SarvamTelephonyService:
                     if not stream_id:
                         stream_id = msg.get("streamId") or msg.get("media", {}).get("streamId") or call_id
 
-                    # Fallback watchdog: if caller stays silent for 5.0 seconds after connect, gently initiate greeting
-                    if not greeting_delivered and not is_agent_speaking and not is_user_speaking:
-                        if (now - call_start_time) > 5.0 and len(audio_buffer) == 0:
-                            logger.info(f"[SarvamTelephony] Caller silent after connect (5.0s). Delivering opening greeting to streamId: {stream_id}")
-                            greeting_delivered = True
-                            greeting_started_time = now
-                            current_turn_task = asyncio.create_task(play_audio_task(greeting_mulaw))
-                            conversation_history.append({"role": "assistant", "content": greeting})
-                            async with AsyncSessionLocal() as session:
-                                stmt = select(Transcript).where(Transcript.call_id == call_id)
-                                tr = (await session.execute(stmt)).scalar_one_or_none()
-                                if tr:
-                                    session.add(
-                                        TranscriptSegment(
-                                            transcript_id=tr.id,
-                                            speaker="agent",
-                                            text=greeting,
-                                            start_time=round(now - call_start_time, 2),
-                                            end_time=round(now + 3.0 - call_start_time, 2),
-                                            sequence=sequence_counter,
-                                            confidence=1.0,
-                                        )
+                    # Instant playback on first media chunk if start event didn't trigger it yet
+                    if not greeting_delivered and greeting_mulaw:
+                        logger.info(f"[SarvamTelephony] Delivering pre-loaded greeting on first media chunk to streamId: {stream_id}")
+                        greeting_delivered = True
+                        greeting_started_time = now
+                        current_turn_task = asyncio.create_task(play_audio_task(greeting_mulaw))
+                        conversation_history.append({"role": "assistant", "content": greeting})
+                        async with AsyncSessionLocal() as session:
+                            stmt = select(Transcript).where(Transcript.call_id == call_id)
+                            tr = (await session.execute(stmt)).scalar_one_or_none()
+                            if tr:
+                                session.add(
+                                    TranscriptSegment(
+                                        transcript_id=tr.id,
+                                        speaker="agent",
+                                        text=greeting,
+                                        start_time=0.0,
+                                        end_time=round(now - call_start_time + 3.0, 2),
+                                        sequence=sequence_counter,
+                                        confidence=1.0,
                                     )
-                                    await session.commit()
-                            sequence_counter += 1
+                                )
+                                await session.commit()
+                        sequence_counter += 1
 
                     media_payload = msg.get("media", {}).get("payload", "")
                     if not media_payload:

@@ -57,6 +57,60 @@ class LeadIntelligenceService:
         else:
             self.classifier = None
 
+    @staticmethod
+    def detect_first_question_yes(segments: Optional[List[Any]] = None, transcript_text: str = "") -> bool:
+        """
+        Determines if the customer answered 'YES' / affirmative to the agent's opening question.
+        Client Policy: If customer says YES to the first question, they are marked as an INTERESTED lead
+        even if further in the conversation they say no or the call disconnects.
+        """
+        first_customer_text = ""
+        if segments:
+            sorted_segs = sorted(segments, key=lambda s: s.get("sequence", 0) if isinstance(s, dict) else (getattr(s, "sequence", 0) or 0))
+            for seg in sorted_segs:
+                spk = seg.get("speaker", "") if isinstance(seg, dict) else getattr(seg, "speaker", "")
+                txt = seg.get("text", "") if isinstance(seg, dict) else getattr(seg, "text", "")
+                if spk in ("customer", "user", "caller") and txt and txt.strip():
+                    first_customer_text = txt.strip()
+                    break
+
+        if not first_customer_text and transcript_text:
+            for line in transcript_text.splitlines():
+                if line.startswith("Customer:"):
+                    first_customer_text = line.replace("Customer:", "").strip()
+                    break
+
+        if not first_customer_text:
+            return False
+
+        t = first_customer_text.lower().strip()
+
+        # Immediate refusal words
+        neg_words = [w.strip("।,?!.") for w in t.split()]
+        if any(w in ["नहीं", "नही", "ना", "no", "nahi", "nahin", "nope", "not", "nako", "नाही", "नको"] for w in neg_words[:2]):
+            return False
+
+        if any(neg in t for neg in [
+            "not interested", "nahi chahiye", "nahi lena", "नहीं चाहिए", "नहीं लेना",
+            "काट दो", "कट करो", "फोन रखो", "रखो फोन", "mat karo", "don't call"
+        ]):
+            return False
+
+        # Positive interest confirmation signals
+        pos_keywords = [
+            "हाँ", "हा", "हाँजी", "जी", "हां", "हॉं", "यस", "yes", "sure", "bataiye", "batao",
+            "bolo", "boliye", "interested", "sahi hai", "theek hai", "ha", "han", "haan",
+            "okay", "ok", "bilkul", "बिल्कुल", "बताइए", "बोलो", "बोलिए", "ज़रूर", "जरूर",
+            "सांगा", "हो", "आहे", "kahiye", "bol raha", "bataye", "ji haan", "ji ha"
+        ]
+        if any(pos in t for pos in pos_keywords):
+            return True
+
+        if any(w in ["yes", "ha", "haan", "han", "ji", "ok", "okay", "sure"] for w in neg_words):
+            return True
+
+        return False
+
     def build_transcript_text(self, call: Call, segments: Optional[List[Any]] = None) -> str:
         """
         Extracts formatted multi-turn conversation text from call transcript segments.
@@ -119,7 +173,12 @@ Transcript to analyze:
 \"\"\"
 
 Crucial Classification Rules:
-1. Indic & Hindi Nuances:
+1. First Question Yes Policy (TOP PRIORITY CLIENT POLICY):
+   - At the beginning of the call, the agent asks whether the customer is interested or open to talking (e.g. "क्या आप इसमें इंटरेस्टेड हैं?").
+   - If customer says YES ("हाँ", "जी", "हांजी", "yes", "sure", "bataiye", "theek hai", "interested") to this first question:
+     status: "interested", is_interested: true, classification: "INTERESTED", interest_strength: "HIGH", confidence: 0.95.
+   - CRUCIAL: Even if further in the conversation the customer says no or the call ends abruptly, saying YES to the first qualification question confirms they ARE an INTERESTED lead!
+2. Indic & Hindi Nuances:
    - Phrases like "नॉट इंटरेस्टेड", "not interested", "नहीं बोलना", "नहीं चाहिए", "phone mat karo", "fursat nahi hai", "cut the call", "wrong number", or hanging up with clear negative sentiment MUST BE CLASSIFIED AS:
      status: "not_interested", is_interested: false, classification: "NOT_INTERESTED", interest_strength: "NONE", confidence: 0.90 to 0.99.
    - Under NO circumstance should a customer rejection or refusal be classified as interested!
@@ -243,11 +302,11 @@ Return ONLY a valid JSON object with these exact keys:
             except Exception as ae:
                 logger.warning(f"Offline transcript analyzer failed: {ae}")
 
-        # Business policy (client rule): a YES to the FIRST question
-        # shortlists the lead immediately, whichever classifier runs below.
-        # An opt-out anywhere in the call always overrides it.
-        first_q_yes = bool(offline.get("first_question_yes")) and not bool(
-            offline.get("opt_out_do_not_call"))
+        # Business policy (client rule): If customer says YES to the first question,
+        # they are added to the INTERESTED leads pipeline even if further in the conversation they say no.
+        first_q_yes = self.detect_first_question_yes(segments=segments, transcript_text=transcript_text)
+        if not first_q_yes and bool(offline.get("first_question_yes")):
+            first_q_yes = True
 
         # 1. Primary: Evaluate using Gemini LLM
         gemini_result = None
@@ -269,13 +328,17 @@ Return ONLY a valid JSON object with these exact keys:
             signals = gemini_result.get("signals", [])
             languages = gemini_result.get("languages", ["Hindi"])
 
-            # First-question YES policy: shortlist even if Gemini scored the
-            # rest of the call lower (opt-out still wins — handled below).
-            if first_q_yes and not opt_out:
+            # First-question YES policy: Customer confirmed interest at Question 1.
+            # Client Rule: Always add to interested leads even if later in conversation they said no.
+            if first_q_yes:
                 is_interested = True
-                reasoning = ("Shortlisted at Question 1: customer said YES to "
-                             "the first question. " + reasoning).strip()
-                rule_applied = rule_applied + "+first_question_yes"
+                status = "interested"
+                classification_str = "INTERESTED"
+                interest_strength_str = "HIGH"
+                confidence = max(confidence, 0.95)
+                opt_out = False
+                reasoning = ("Shortlisted at Question 1: customer answered YES to the initial interest question. " + reasoning).strip()
+                rule_applied = "First Question YES Policy (Customer confirmed interest)"
 
             # Sync Call disposition
             if opt_out:
@@ -308,7 +371,7 @@ Return ONLY a valid JSON object with these exact keys:
             lead_res = await session.execute(lead_stmt)
             existing_lead = lead_res.scalar_one_or_none()
 
-            if is_interested and not opt_out:
+            if is_interested or first_q_yes:
                 lead_metadata = {
                     "classification": classification_str,
                     "interest_strength": interest_strength_str,
@@ -441,7 +504,7 @@ Return ONLY a valid JSON object with these exact keys:
                 lead_res = await session.execute(lead_stmt)
                 lead = lead_res.scalar_one_or_none()
 
-                if is_interested and not diag.opt_out_detected:
+                if is_interested or first_q_yes:
                     lead_metadata = {
                         "classification": diag.classification.value,
                         "interest_strength": diag.interest_strength.value,
