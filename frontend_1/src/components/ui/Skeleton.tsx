@@ -24,7 +24,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
   return (
     <div
       className={clsx(
-        'animate-pulse bg-slate-200/80 dark:bg-slate-800/80',
+        'skeleton-shimmer bg-slate-200/80 dark:bg-slate-800/80',
         variantClasses[variant],
         className
       )}

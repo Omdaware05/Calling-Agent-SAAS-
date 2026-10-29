@@ -60,7 +60,11 @@ export const AppShell: React.FC = () => {
             />
 
             <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-              <Outlet />
+              {/* Keyed by route: every page change replays a short,
+                  premium fade-rise transition */}
+              <div key={location.pathname} className="anim-page">
+                <Outlet />
+              </div>
             </main>
           </div>
         </div>

@@ -459,6 +459,8 @@ export const DashboardPage: React.FC = () => {
       {/* 3. Operational 4 KPI Cards Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
+          className="anim-enter"
+          style={{ animationDelay: '0ms' }}
           label="Total Calls"
           value={totalCalls}
           subtext={isAllBusinesses ? 'Across all client businesses' : 'Attributed to this business'}
@@ -466,6 +468,8 @@ export const DashboardPage: React.FC = () => {
           isLoading={isAllBusinesses ? (!globalStats && statsLoading) : (!agentDashboard && !globalStats && (dashLoading || statsLoading))}
         />
         <MetricCard
+          className="anim-enter"
+          style={{ animationDelay: '70ms' }}
           label="Live Active Calls"
           value={scopedActiveCalls.length}
           subtext="Full-duplex speech active"
@@ -473,6 +477,8 @@ export const DashboardPage: React.FC = () => {
           trend={{ value: scopedActiveCalls.length > 0 ? 'Active' : 'Idle', positive: scopedActiveCalls.length > 0 }}
         />
         <MetricCard
+          className="anim-enter"
+          style={{ animationDelay: '140ms' }}
           label="Captured Leads"
           value={scopedLeads.length}
           subtext="Qualified prospects"
@@ -480,6 +486,8 @@ export const DashboardPage: React.FC = () => {
           isLoading={!leads.length && leadsLoading}
         />
         <MetricCard
+          className="anim-enter"
+          style={{ animationDelay: '210ms' }}
           label="Average Call Duration"
           value={`${(isAllBusinesses ? (globalStats?.average_duration_seconds ?? 0) : (agentDashboard?.average_duration_seconds ?? 0)).toFixed(1)}s`}
           subtext="Conversational handle time"
@@ -493,7 +501,7 @@ export const DashboardPage: React.FC = () => {
         {/* LEFT COLUMN (7 Cols) */}
         <div className="lg:col-span-7 space-y-6">
           {/* Card: Live Active Conversations */}
-          <Card stars={true}>
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <div>
                 <CardTitle className="text-sm flex items-center gap-2">
@@ -566,7 +574,7 @@ export const DashboardPage: React.FC = () => {
           </Card>
 
           {/* Card: Assigned AI Agents */}
-          <Card stars={true}>
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <div>
                 <CardTitle className="text-sm flex items-center gap-2">
@@ -635,7 +643,7 @@ export const DashboardPage: React.FC = () => {
           </Card>
 
           {/* Card: Recent Leads */}
-          <Card stars={true}>
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <div>
                 <CardTitle className="text-sm flex items-center gap-2">
@@ -681,7 +689,7 @@ export const DashboardPage: React.FC = () => {
         {/* RIGHT COLUMN (5 Cols) */}
         <div className="lg:col-span-5 space-y-6">
           {/* Card: Call Outcome Breakdown (Standard Modern SaaS Design) */}
-          <Card stars={true}>
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <div>
                 <CardTitle className="text-sm flex items-center gap-2">
@@ -821,7 +829,7 @@ export const DashboardPage: React.FC = () => {
           </Card>
 
           {/* Card: Quick Actions (Exact match to reference) */}
-          <Card stars={true}>
+          <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Zap className="w-4 h-4 text-orange-400" />
@@ -874,7 +882,7 @@ export const DashboardPage: React.FC = () => {
           </Card>
 
           {/* Card: Recent Completed Calls */}
-          <Card stars={true}>
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <div>
                 <CardTitle className="text-sm flex items-center gap-2">

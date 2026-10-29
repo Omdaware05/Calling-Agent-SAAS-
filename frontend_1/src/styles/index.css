@@ -212,3 +212,166 @@
 .sound-bar:nth-child(3) { animation-delay: 0.3s; }
 .sound-bar:nth-child(4) { animation-delay: 0.45s; }
 .sound-bar:nth-child(5) { animation-delay: 0.6s; }
+
+/* ==========================================================================
+   Premium Motion System — restrained, enterprise-grade animation.
+   One easing curve everywhere (easeOutExpo), short durations, subtle
+   travel distances. Motion should feel like polish, never like a show.
+   ========================================================================== */
+
+:root {
+  --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes enter-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes enter-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.965) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Whole-page transition on route change (AppShell keys this by pathname) */
+.anim-page {
+  animation: enter-up 0.55s var(--ease-premium) both;
+}
+
+/* Staggered entrance for headers, cards and sections.
+   Pair with inline style={{ animationDelay: '80ms' }} for the stagger. */
+.anim-enter {
+  opacity: 0;
+  animation: enter-up 0.65s var(--ease-premium) forwards;
+}
+
+.anim-fade {
+  animation: enter-fade 0.3s ease-out both;
+}
+
+.anim-scale-in {
+  animation: scale-in 0.38s var(--ease-premium) both;
+}
+
+.anim-drawer-in {
+  animation: drawer-in 0.42s var(--ease-premium) both;
+}
+
+/* Table rows settle in with a capped stagger (delay set inline per row) */
+.anim-row {
+  animation: row-in 0.5s var(--ease-premium) both;
+}
+
+/* Skeleton shimmer — a soft light sweep instead of a flat pulse */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.14) 50%,
+    transparent 100%
+  );
+  animation: shimmer-sweep 1.6s ease-in-out infinite;
+}
+
+@keyframes shimmer-sweep {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Refined card hover: deeper, softer shadow (transform lift stays with
+   the Card component so tilt users are unaffected) */
+.glass-card:hover {
+  box-shadow:
+    0 12px 34px -10px rgba(0, 0, 0, 0.28),
+    0 4px 14px -6px rgba(0, 0, 0, 0.18);
+}
+
+/* Text selection + keyboard focus in the brand accent */
+::selection {
+  background: rgba(var(--primary-rgb), 0.32);
+}
+
+:focus-visible {
+  outline: 2px solid rgba(var(--primary-rgb), 0.65);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Respect users who prefer reduced motion: everything lands instantly */
+@media (prefers-reduced-motion: reduce) {
+  .anim-page,
+  .anim-enter,
+  .anim-fade,
+  .anim-scale-in,
+  .anim-drawer-in,
+  .anim-row {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .skeleton-shimmer::after {
+    animation: none !important;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+}

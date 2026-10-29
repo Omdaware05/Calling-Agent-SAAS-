@@ -1,7 +1,79 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { Card } from './Card';
 import { Skeleton } from './Skeleton';
+
+/** Ease-out count-up for metric values. Animates from the previous value
+ * whenever the target changes (e.g. live refetch), and jumps instantly
+ * for users who prefer reduced motion. */
+function useAnimatedNumber(target: number, duration = 950): number {
+  const [display, setDisplay] = useState(0);
+  const prevRef = useRef(0);
+
+  useEffect(() => {
+    const from = prevRef.current;
+    if (from === target || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setDisplay(target);
+      prevRef.current = target;
+      return;
+    }
+    let raf = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = t === 1 ? 1 : 1 - Math.pow(2, -10 * t); // easeOutExpo
+      setDisplay(from + (target - from) * eased);
+      if (t < 1) {
+        raf = requestAnimationFrame(tick);
+      } else {
+        prevRef.current = target;
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+
+  return display;
+}
+
+const AnimatedNumber: React.FC<{ target: number; decimals: number }> = ({ target, decimals }) => {
+  const value = useAnimatedNumber(target);
+  return (
+    <>
+      {value.toLocaleString('en-IN', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      })}
+    </>
+  );
+};
+
+const NUMERIC_RE = /^(\s*[^0-9]*?)([\d][\d,]*(?:\.\d+)?)(.*)$/s;
+
+/** Renders a metric value with its numeric core counted up, preserving
+ * any prefix/suffix (€, ₹, %, "calls", …). Non-numeric values pass through. */
+function renderAnimatedValue(value: string | number | React.ReactNode): React.ReactNode {
+  if (typeof value === 'number') {
+    return <AnimatedNumber target={value} decimals={Number.isInteger(value) ? 0 : 2} />;
+  }
+  if (typeof value === 'string') {
+    const m = value.match(NUMERIC_RE);
+    if (m) {
+      const num = parseFloat(m[2].replace(/,/g, ''));
+      if (isFinite(num)) {
+        const decimals = m[2].includes('.') ? m[2].split('.')[1].length : 0;
+        return (
+          <>
+            {m[1]}
+            <AnimatedNumber target={num} decimals={decimals} />
+            {m[3]}
+          </>
+        );
+      }
+    }
+  }
+  return value;
+}
 
 export interface MetricCardProps {
   label: string;
@@ -14,6 +86,7 @@ export interface MetricCardProps {
   };
   isLoading?: boolean;
   className?: string;
+  style?: React.CSSProperties;
   glow?: boolean;
   tilt?: boolean;
   stars?: boolean;
@@ -29,11 +102,15 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   trend,
   isLoading = false,
   className,
+  style,
   glow = true,
-  tilt = true,
-  stars = true,
+  // Calm, professional defaults for client delivery: the playful tilt /
+  // stars / ripple effects stay available as opt-ins, but metrics no
+  // longer wobble or sparkle by default.
+  tilt = false,
+  stars = false,
   magnetism = false,
-  ripple = true,
+  ripple = false,
 }) => {
   return (
     <Card
@@ -42,6 +119,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
       stars={stars}
       magnetism={magnetism}
       ripple={ripple}
+      style={style}
       className={clsx('flex flex-col justify-between cursor-default', className)}
     >
       <div className="flex items-center justify-between gap-2">
@@ -74,7 +152,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
           <Skeleton height={32} width={70} />
         ) : (
           <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-[#F8F8FA] tabular-nums">
-            {value}
+            {renderAnimatedValue(value)}
           </div>
         )}
       </div>

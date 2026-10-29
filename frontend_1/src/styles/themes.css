@@ -7,7 +7,7 @@
   --amb-b-rgb: 234, 88, 12;
   --amb-c-rgb: 251, 146, 60;
   --amb-dots-rgb: 249, 115, 22;
-  --amb-intensity: 1;
+  --amb-intensity: 0.55;
 
   --brand-primary: rgb(var(--primary-rgb));
   --brand-primary-hover: rgba(var(--primary-rgb), 0.88);
@@ -24,7 +24,7 @@
   --amb-b-rgb: 124, 58, 237;
   --amb-c-rgb: 167, 139, 250;
   --amb-dots-rgb: 139, 92, 246;
-  --amb-intensity: 1;
+  --amb-intensity: 0.55;
 
   --brand-primary: #8b5cf6;
   --brand-primary-hover: #7c3aed;

@@ -173,14 +173,15 @@ export function DataTable<T>({
                   </td>
                 </tr>
               ) : (
-                paginatedData.map((item) => {
+                paginatedData.map((item, rowIdx) => {
                   const key = keyExtractor(item);
                   return (
                     <tr
                       key={key}
                       onClick={() => onRowClick && onRowClick(item)}
+                      style={{ animationDelay: `${Math.min(rowIdx * 45, 360)}ms` }}
                       className={clsx(
-                        'transition-colors duration-150',
+                        'anim-row transition-colors duration-150',
                         'hover:bg-slate-50/80 dark:hover:bg-[rgba(var(--primary-rgb),0.08)]',
                         onRowClick && 'cursor-pointer'
                       )}

@@ -140,11 +140,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onClick={onCloseMobile}
                   className={({ isActive }) =>
                     clsx(
-                      'flex items-center rounded-xl text-[13px] font-medium transition-all group relative',
+                      'flex items-center rounded-xl text-[13px] font-medium transition-all duration-200 group relative',
                       isCollapsed ? 'justify-center p-2.5' : 'gap-3 px-3 py-2',
                       isActive
-                        ? 'bg-gradient-to-r from-orange-500/25 to-orange-500/10 border border-orange-500/35 text-white font-semibold shadow-[0_0_16px_rgba(249,115,22,0.12)]'
-                        : 'text-slate-600 dark:text-[#D0D0D8] hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.06]'
+                        ? 'bg-gradient-to-r from-orange-500/[0.18] to-orange-500/[0.06] border border-orange-500/25 text-white font-semibold shadow-[0_2px_10px_rgba(249,115,22,0.10)]'
+                        : 'text-slate-600 dark:text-[#D0D0D8] hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.06] hover:translate-x-[2px]'
                     )
                   }
                   title={isCollapsed ? item.name : undefined}
