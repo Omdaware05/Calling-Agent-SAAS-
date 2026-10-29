@@ -268,7 +268,14 @@ class SarvamTelephonyService:
             return b""
 
         target_voice = self._normalize_sarvam_speaker(voice)
-        cache_key = f"{target_voice}:{language_code}:{clean_text}"
+        target_lang = language_code
+        marathi_markers = ["आहे", "नाही", "नको", "तुम्हाला", "बियाणे", "सांगा", "होय", "कडुन", "कडून", "हवे", "विचार", "खरेदी", "नियोजन", "गहू", "हरभरा", "एकर", "पाहिजे"]
+        if any(m in clean_text for m in marathi_markers):
+            target_lang = "mr-IN"
+        elif any(h in clean_text for h in ["है", "हूँ", "बताइए", "नमस्ते", "धन्यवाद", "गेहूँ", "चना"]):
+            target_lang = "hi-IN"
+
+        cache_key = f"{target_voice}:{target_lang}:{clean_text}"
         if cache_key in self._tts_cache:
             return self._tts_cache[cache_key]
 
@@ -276,7 +283,7 @@ class SarvamTelephonyService:
         headers = {"api-subscription-key": self.sarvam_api_key}
         payload = {
             "inputs": [clean_text],
-            "target_language_code": language_code,
+            "target_language_code": target_lang,
             "speaker": target_voice,
             "model": self.tts_model,
             "speech_sample_rate": 8000,

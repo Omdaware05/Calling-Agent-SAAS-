@@ -178,7 +178,11 @@ Crucial Classification Rules:
    - If customer says YES ("हाँ", "जी", "हांजी", "yes", "sure", "bataiye", "theek hai", "interested") to this first question:
      status: "interested", is_interested: true, classification: "INTERESTED", interest_strength: "HIGH", confidence: 0.95.
    - CRUCIAL: Even if further in the conversation the customer says no or the call ends abruptly, saying YES to the first qualification question confirms they ARE an INTERESTED lead!
-2. Indic & Hindi Nuances:
+2. Call Duration Policy (> 1 Minute Engagement):
+   - If the customer engages in conversation for more than 1 minute (or participates in multi-turn questions about acreage, seed varieties, quantity, timing, or price):
+     They have invested meaningful time and MUST BE CLASSIFIED AS:
+     status: "interested", is_interested: true, classification: "INTERESTED", interest_strength: "HIGH", confidence: 0.92+.
+3. Indic & Hindi Nuances:
    - Phrases like "नॉट इंटरेस्टेड", "not interested", "नहीं बोलना", "नहीं चाहिए", "phone mat karo", "fursat nahi hai", "cut the call", "wrong number", or hanging up with clear negative sentiment MUST BE CLASSIFIED AS:
      status: "not_interested", is_interested: false, classification: "NOT_INTERESTED", interest_strength: "NONE", confidence: 0.90 to 0.99.
    - Under NO circumstance should a customer rejection or refusal be classified as interested!
@@ -308,6 +312,25 @@ Return ONLY a valid JSON object with these exact keys:
         if not first_q_yes and bool(offline.get("first_question_yes")):
             first_q_yes = True
 
+        # Duration Policy: If customer speaks / engages for more than 1 minute (>60s),
+        # they are classified as an INTERESTED lead per business rule.
+        call_duration = getattr(call, "duration", 0) or 0
+        customer_speech_duration = 0.0
+        if segments:
+            for seg in segments:
+                spk = seg.get("speaker", "") if isinstance(seg, dict) else getattr(seg, "speaker", "")
+                if spk in ("customer", "user", "caller"):
+                    st = seg.get("start_time", 0.0) if isinstance(seg, dict) else (getattr(seg, "start_time", 0.0) or 0.0)
+                    et = seg.get("end_time", 0.0) if isinstance(seg, dict) else (getattr(seg, "end_time", 0.0) or 0.0)
+                    if et > st:
+                        customer_speech_duration += (et - st)
+        elif transcript_text:
+            cust_lines = [l for l in transcript_text.splitlines() if l.startswith("Customer:")]
+            if len(cust_lines) >= 4:
+                customer_speech_duration = max(customer_speech_duration, len(cust_lines) * 15.0)
+
+        duration_interested = (call_duration >= 60) or (customer_speech_duration >= 50.0)
+
         # 1. Primary: Evaluate using Gemini LLM
         gemini_result = None
         try:
@@ -339,6 +362,17 @@ Return ONLY a valid JSON object with these exact keys:
                 opt_out = False
                 reasoning = ("Shortlisted at Question 1: customer answered YES to the initial interest question. " + reasoning).strip()
                 rule_applied = "First Question YES Policy (Customer confirmed interest)"
+            elif duration_interested:
+                # Duration Policy: Customer spoke for > 1 minute
+                is_interested = True
+                status = "interested"
+                classification_str = "INTERESTED"
+                interest_strength_str = "HIGH"
+                confidence = max(confidence, 0.92)
+                opt_out = False
+                dur_secs = int(call_duration if call_duration >= 60 else customer_speech_duration)
+                reasoning = (f"Shortlisted by Duration: customer engaged in conversation for {dur_secs}s (>1 minute). " + reasoning).strip()
+                rule_applied = "Call Duration > 1 Min Engagement Policy"
 
             # Sync Call disposition
             if opt_out:
@@ -371,7 +405,7 @@ Return ONLY a valid JSON object with these exact keys:
             lead_res = await session.execute(lead_stmt)
             existing_lead = lead_res.scalar_one_or_none()
 
-            if is_interested or first_q_yes:
+            if is_interested or first_q_yes or duration_interested:
                 lead_metadata = {
                     "classification": classification_str,
                     "interest_strength": interest_strength_str,
@@ -468,9 +502,11 @@ Return ONLY a valid JSON object with these exact keys:
                     diag.classification in (IntentClassification.INTERESTED, IntentClassification.NEEDS_INFORMATION)
                     or diag.binary_classification == "INTERESTED"
                 )
-                # First-question YES policy (opt-out below still wins).
-                if first_q_yes and not diag.opt_out_detected:
+                # First-question YES policy or Duration Policy (>1 min)
+                if first_q_yes or duration_interested:
                     is_interested = True
+                    diag.opt_out_detected = False
+                    confidence = max(confidence, 0.95 if first_q_yes else 0.92)
                 confidence = float(diag.confidence)
 
                 # Determine disposition and handle opt-out suppression
@@ -504,7 +540,7 @@ Return ONLY a valid JSON object with these exact keys:
                 lead_res = await session.execute(lead_stmt)
                 lead = lead_res.scalar_one_or_none()
 
-                if is_interested or first_q_yes:
+                if is_interested or first_q_yes or duration_interested:
                     lead_metadata = {
                         "classification": diag.classification.value,
                         "interest_strength": diag.interest_strength.value,
