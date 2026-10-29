@@ -105,10 +105,16 @@ export const ModernFollowups: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => callMutation.mutate(f.followup_id)}
-                    disabled={callMutation.isPending}
-                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
+                    disabled={callMutation.isPending && callMutation.variables === f.followup_id}
+                    title="Call Now"
+                    aria-label="Call Now"
+                    className="w-8 h-8 rounded-full bg-orange-600 hover:bg-orange-500 text-white flex items-center justify-center transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50 shrink-0"
                   >
-                    <PhoneCall className="w-3.5 h-3.5" /> Call Now
+                    {callMutation.isPending && callMutation.variables === f.followup_id ? (
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <PhoneCall className="w-3.5 h-3.5" />
+                    )}
                   </button>
                   <button
                     type="button"

@@ -230,15 +230,20 @@ export const FollowupsPage: React.FC = () => {
         return (
           <div className="flex items-center justify-end gap-1.5">
             {isOpen && (
-              <Button
-                variant="primary"
-                size="xs"
+              <button
+                type="button"
                 onClick={() => callMutation.mutate(f.followup_id)}
-                isLoading={callMutation.isPending && callMutation.variables === f.followup_id}
-                leftIcon={<PhoneCall className="w-3 h-3" />}
+                disabled={callMutation.isPending && callMutation.variables === f.followup_id}
+                title="Call Now"
+                aria-label="Call Now"
+                className="w-7 h-7 rounded-lg bg-orange-500 hover:bg-orange-400 active:bg-orange-600 text-white shadow-sm flex items-center justify-center transition-all cursor-pointer disabled:opacity-50 active:scale-95 border border-orange-400/30 shrink-0"
               >
-                Call Now
-              </Button>
+                {callMutation.isPending && callMutation.variables === f.followup_id ? (
+                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <PhoneCall className="w-3.5 h-3.5" />
+                )}
+              </button>
             )}
             <Button variant="outline" size="xs" onClick={() => handleOpenEdit(f)}>
               Manage
