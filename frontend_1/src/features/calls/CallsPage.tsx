@@ -94,7 +94,7 @@ export const CallsPage: React.FC = () => {
       sortable: true,
       render: (call) => (
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/20 flex items-center justify-center shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-slate-900/[0.04] dark:bg-white/[0.06] text-orange-500 dark:text-orange-400 border border-slate-900/[0.07] dark:border-white/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] flex items-center justify-center shrink-0">
             <PhoneCall className="w-4 h-4" />
           </div>
           <div className="flex flex-col">

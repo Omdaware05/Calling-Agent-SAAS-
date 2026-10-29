@@ -64,7 +64,7 @@ export const ActiveCallsPage: React.FC = () => {
             <Card key={call.call_id} className="relative overflow-hidden">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/20 flex items-center justify-center font-bold shrink-0 shadow-sm">
+                  <div className="w-9 h-9 rounded-lg bg-slate-900/[0.04] dark:bg-white/[0.06] text-orange-500 dark:text-orange-400 border border-slate-900/[0.07] dark:border-white/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] flex items-center justify-center font-bold shrink-0 shadow-sm">
                     <PhoneCall className="w-4 h-4" />
                   </div>
                   <div>

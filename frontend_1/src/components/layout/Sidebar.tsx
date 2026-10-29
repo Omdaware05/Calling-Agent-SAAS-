@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import { BrandMark } from '../ui/BrandMark';
 import {
   LayoutDashboard,
   Building2,
@@ -101,19 +102,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div>
         <div className="h-16 flex items-center px-4 border-b border-slate-200/80 dark:border-white/[0.07]">
           <NavLink to="/" className="flex items-center gap-2.5 overflow-hidden w-full group">
-            {/* ARB SoftTech Waveform Logo */}
-            <div className="w-7 h-7 flex items-center justify-center shrink-0">
-              <svg className="w-5 h-5 text-orange-500" viewBox="0 0 24 24" fill="currentColor">
-                <rect x="2" y="8" width="2.5" height="8" rx="1.25" />
-                <rect x="6.5" y="4" width="2.5" height="16" rx="1.25" />
-                <rect x="11" y="2" width="2.5" height="20" rx="1.25" />
-                <rect x="15.5" y="4" width="2.5" height="16" rx="1.25" />
-                <rect x="20" y="8" width="2.5" height="8" rx="1.25" />
-              </svg>
+            {/* ARB SoftTech brand mark (shared component, same artwork as the favicon) */}
+            <div className="flex items-center justify-center shrink-0">
+              <BrandMark className="w-8 h-8 drop-shadow-[0_2px_6px_rgba(249,115,22,0.35)]" />
             </div>
             {!isCollapsed && (
               <div className="flex flex-col min-w-0">
-                <span className="font-bold text-xs tracking-wider text-slate-900 dark:text-white leading-tight font-mono whitespace-nowrap">
+                <span className="font-bold text-[13px] tracking-tight text-slate-900 dark:text-white leading-tight whitespace-nowrap">
                   ARB SoftTech
                 </span>
                 <span className="text-[10px] text-slate-500 dark:text-neutral-400">

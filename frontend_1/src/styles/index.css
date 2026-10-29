@@ -339,6 +339,13 @@
     0 4px 14px -6px rgba(0, 0, 0, 0.18);
 }
 
+/* One consistent icon voice app-wide: Lucide at a refined 1.75 stroke
+   (the library default 2 reads chunky at small sizes). CSS wins over the
+   per-icon attribute, so every icon matches without touching call sites. */
+.lucide {
+  stroke-width: 1.75px;
+}
+
 /* Text selection + keyboard focus in the brand accent */
 ::selection {
   background: rgba(var(--primary-rgb), 0.32);

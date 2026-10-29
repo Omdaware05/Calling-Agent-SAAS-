@@ -86,7 +86,7 @@ export const CallDetailDrawer: React.FC<CallDetailDrawerProps> = ({ callId, onCl
           {/* Metadata Grid Header */}
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.08] flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/20 flex items-center justify-center font-bold">
+              <div className="w-10 h-10 rounded-lg bg-slate-900/[0.04] dark:bg-white/[0.06] text-orange-500 dark:text-orange-400 border border-slate-900/[0.07] dark:border-white/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] flex items-center justify-center font-bold">
                 <PhoneCall className="w-5 h-5" />
               </div>
               <div>
