@@ -14,7 +14,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   actions,
 }) => {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/80 dark:border-white/[0.07]">
+    <div className="app-pageheader flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/80 dark:border-white/[0.07]">
       <div className="flex flex-col gap-0.5 anim-enter">
         {category && (
           <span className="text-[11px] font-semibold text-orange-400 uppercase tracking-[0.14em]">

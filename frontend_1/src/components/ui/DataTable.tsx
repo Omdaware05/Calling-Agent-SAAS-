@@ -130,7 +130,7 @@ export function DataTable<T>({
       >
         <ParticleStars isHovered={isTableHovered} particleCount={25} />
         <div className="relative z-[1] overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="app-table w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-200/90 dark:border-white/[0.08] bg-slate-50/70 dark:bg-white/[0.02] text-[12px] font-semibold text-slate-600 dark:text-[#C9C9D1] uppercase tracking-wider">
                 {columns.map((col) => (

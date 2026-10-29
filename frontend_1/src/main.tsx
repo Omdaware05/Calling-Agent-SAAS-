@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './app/App';
 import './styles/index.css';
+import './styles/modern.css';
 
 // Purge any stale service workers or caches from previous localhost PWAs (e.g. NagarDarpan)
 if (typeof window !== 'undefined') {

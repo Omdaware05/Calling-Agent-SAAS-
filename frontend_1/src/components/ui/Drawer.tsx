@@ -59,7 +59,7 @@ export const Drawer: React.FC<DrawerProps> = ({
       <div className="fixed inset-y-0 right-0 pl-10 max-w-full flex">
         <div
           className={clsx(
-            'anim-drawer-in w-screen bg-white/90 dark:bg-[var(--modal-glass-bg)] backdrop-blur-[20px] saturate-[140%] border-l border-slate-200/80 dark:border-white/[0.10] shadow-[0_24px_48px_rgba(0,0,0,0.5)] flex flex-col',
+            'app-overlay-panel anim-drawer-in w-screen bg-white/90 dark:bg-[var(--modal-glass-bg)] backdrop-blur-[20px] saturate-[140%] border-l border-slate-200/80 dark:border-white/[0.10] shadow-[0_24px_48px_rgba(0,0,0,0.5)] flex flex-col',
             widthClasses[width]
           )}
         >

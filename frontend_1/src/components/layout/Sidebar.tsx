@@ -97,7 +97,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const sidebarContent = (
-    <div className="h-full flex flex-col justify-between bg-white/75 dark:bg-[var(--sidebar-glass-bg)] backdrop-blur-[20px] saturate-[140%] border-r border-slate-200/80 dark:border-white/[0.08] transition-all duration-200">
+    <div className="app-sidebar h-full flex flex-col justify-between bg-white/75 dark:bg-[var(--sidebar-glass-bg)] backdrop-blur-[20px] saturate-[140%] border-r border-slate-200/80 dark:border-white/[0.08] transition-all duration-200">
       {/* Brand Header */}
       <div>
         <div className="h-16 flex items-center px-4 border-b border-slate-200/80 dark:border-white/[0.07]">
@@ -135,10 +135,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onClick={onCloseMobile}
                   className={({ isActive }) =>
                     clsx(
-                      'flex items-center rounded-xl text-[13px] font-medium transition-all duration-200 group relative',
+                      'app-navlink flex items-center rounded-xl text-[13px] font-medium transition-all duration-200 group relative',
                       isCollapsed ? 'justify-center p-2.5' : 'gap-3 px-3 py-2',
                       isActive
-                        ? 'bg-gradient-to-r from-orange-500/[0.18] to-orange-500/[0.06] border border-orange-500/25 text-white font-semibold shadow-[0_2px_10px_rgba(249,115,22,0.10)]'
+                        ? 'app-navlink-active bg-gradient-to-r from-orange-500/[0.18] to-orange-500/[0.06] border border-orange-500/25 text-white font-semibold shadow-[0_2px_10px_rgba(249,115,22,0.10)]'
                         : 'text-slate-600 dark:text-[#D0D0D8] hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.06] hover:translate-x-[2px]'
                     )
                   }

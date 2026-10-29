@@ -724,7 +724,7 @@ export const DashboardPage: React.FC = () => {
                         data={[{ value: 1 }]}
                         innerRadius={52}
                         outerRadius={70}
-                        fill="rgba(255, 255, 255, 0.04)"
+                        fill="rgba(128, 140, 155, 0.18)"
                         stroke="transparent"
                         dataKey="value"
                         isAnimationActive={false}
@@ -765,7 +765,7 @@ export const DashboardPage: React.FC = () => {
 
                   {/* Concentric Glass Center Core */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-[88px] h-[88px] rounded-full bg-slate-900/40 dark:bg-black/50 backdrop-blur-md border border-slate-200/50 dark:border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_4px_16px_rgba(0,0,0,0.35)] flex flex-col items-center justify-center">
+                    <div className="w-[88px] h-[88px] rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-md border border-slate-200/60 dark:border-white/[0.08] shadow-[0_4px_16px_rgba(16,24,40,0.10)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_4px_16px_rgba(0,0,0,0.35)] flex flex-col items-center justify-center">
                       <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">
                         {totalOutcome}
                       </span>

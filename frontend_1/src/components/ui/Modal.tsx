@@ -60,7 +60,7 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Modal Dialog */}
       <div
         className={clsx(
-          'anim-scale-in relative w-full rounded-2xl bg-white/90 dark:bg-[var(--modal-glass-bg)] backdrop-blur-[20px] saturate-[140%] border border-slate-200/80 dark:border-white/[0.10] shadow-[0_24px_48px_rgba(0,0,0,0.5)] transition-all z-10 overflow-hidden',
+          'app-overlay-panel anim-scale-in relative w-full rounded-2xl bg-white/90 dark:bg-[var(--modal-glass-bg)] backdrop-blur-[20px] saturate-[140%] border border-slate-200/80 dark:border-white/[0.10] shadow-[0_24px_48px_rgba(0,0,0,0.5)] transition-all z-10 overflow-hidden',
           sizeClasses[size]
         )}
       >

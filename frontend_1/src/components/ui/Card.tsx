@@ -87,7 +87,7 @@ export const Card: React.FC<CardProps> = ({
       onClick={handleClick}
       className={twMerge(
         clsx(
-          'relative rounded-2xl transition-all duration-200 overflow-hidden',
+          'app-card relative rounded-2xl transition-all duration-200 overflow-hidden',
           'bg-white/75 dark:bg-[var(--card-glass-bg)] backdrop-blur-[18px]',
           'border border-slate-200/80 dark:border-white/[0.09]',
           'shadow-sm dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.35)]',

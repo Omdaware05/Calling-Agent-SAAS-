@@ -4,8 +4,10 @@ import {
   Sun,
   Moon,
   Search,
+  Layers,
+  Sparkles,
 } from 'lucide-react';
-import { useTheme } from '../../app/providers/ThemeProvider';
+import { useTheme, type Look } from '../../app/providers/ThemeProvider';
 import { BusinessSelector } from '../ui/BusinessSelector';
 
 interface HeaderProps {
@@ -14,7 +16,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenMobileSidebar }) => {
-  const { resolvedTheme, toggleTheme } = useTheme();
+  const { resolvedTheme, toggleTheme, look, setLook } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
 
   return (
@@ -47,19 +49,51 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileSidebar }) => {
         {/* Business Workspace Selector */}
         <BusinessSelector />
 
-        {/* Theme Switcher */}
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className="p-2 rounded-xl text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-white bg-slate-100 dark:bg-white/[0.04] hover:bg-slate-200 dark:hover:bg-white/[0.08] transition-colors border border-slate-200 dark:border-white/[0.08]"
-          title={`Switch to ${resolvedTheme === 'dark' ? 'Light' : 'Dark'} mode`}
+        {/* Look Switcher: Classic (glass) vs Modern (clean light) */}
+        <div
+          className="flex items-center p-1 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/[0.08]"
+          role="group"
+          aria-label="Interface look"
+          title="Switch interface look"
         >
-          {resolvedTheme === 'dark' ? (
-            <Sun className="w-4 h-4 text-orange-400" />
-          ) : (
-            <Moon className="w-4 h-4 text-slate-700" />
-          )}
-        </button>
+          {(
+            [
+              { id: 'classic', label: 'Classic', Icon: Layers },
+              { id: 'modern', label: 'Modern', Icon: Sparkles },
+            ] as { id: Look; label: string; Icon: typeof Layers }[]
+          ).map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setLook(id)}
+              aria-pressed={look === id}
+              className={
+                look === id
+                  ? 'flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-white text-slate-900 shadow-sm text-[11px] font-semibold transition-all'
+                  : 'flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-slate-500 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white text-[11px] font-semibold transition-all'
+              }
+            >
+              <Icon className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">{label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Theme Switcher (classic look only — modern is always light) */}
+        {look === 'classic' && (
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="p-2 rounded-xl text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-white bg-slate-100 dark:bg-white/[0.04] hover:bg-slate-200 dark:hover:bg-white/[0.08] transition-colors border border-slate-200 dark:border-white/[0.08]"
+            title={`Switch to ${resolvedTheme === 'dark' ? 'Light' : 'Dark'} mode`}
+          >
+            {resolvedTheme === 'dark' ? (
+              <Sun className="w-4 h-4 text-orange-400" />
+            ) : (
+              <Moon className="w-4 h-4 text-slate-700" />
+            )}
+          </button>
+        )}
       </div>
     </header>
   );
