@@ -11,6 +11,7 @@ from app.database import get_db
 from app.dependencies import verify_app_client
 from app.models.lead import Lead
 from app.schemas.lead import LeadResponse, UpdateLeadRequest
+from app.utils.datetime_utils import to_iso_utc
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +36,8 @@ def map_lead_to_response(l: Lead) -> LeadResponse:
         reasoning=l.reason,
         notes=l.reason,
         metadata=l.metadata_json or {},
-        created_at=l.created_at.isoformat() if l.created_at else datetime.now(UTC).isoformat(),
-        updated_at=l.updated_at.isoformat() if l.updated_at else None,
+        created_at=to_iso_utc(l.created_at) or to_iso_utc(datetime.now(UTC)),
+        updated_at=to_iso_utc(l.updated_at),
     )
 
 

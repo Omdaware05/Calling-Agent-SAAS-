@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { generateBusinessDashboardPdf } from '../../utils/businessPdfExport';
 import { Business } from '../../app/providers/BusinessProvider';
+import { parseServerDate, formatDateTime } from '../../utils/dateUtils';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { CallStateBadge } from '../../components/ui/Badge';
@@ -250,16 +251,7 @@ export const DashboardPage: React.FC = () => {
     : 'AG';
 
   const formatTimestamp = (iso?: string) => {
-    if (!iso) return '';
-    try {
-      const d = new Date(iso);
-      const month = d.toLocaleDateString('en-US', { month: 'short' });
-      const day = d.getDate();
-      const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-      return `${month} ${day}, ${time}`;
-    } catch {
-      return '';
-    }
+    return formatDateTime(iso, 'MMM d, hh:mm a');
   };
 
   return (

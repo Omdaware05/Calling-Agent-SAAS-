@@ -244,6 +244,8 @@ export interface CallRecordingInfo {
 
 export interface CallDocument {
   call_id: string;
+  disposition?: string | null;
+  termination_reason?: string | null;
   campaign_id?: string | null;
   agent_id?: string | null;
   phone_number: string;
@@ -407,7 +409,9 @@ export interface LeadMetadata {
 }
 
 export interface LeadDocument {
+  id?: string;
   lead_id: string;
+  tenant_id?: string | null;
   call_id: string;
   agent_id?: string | null;
   contact_id?: string | null;

@@ -8,7 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.tenant import Tenant
 from app.models.call import Call
 from app.models.lead import Lead
+from app.models.agent import Agent
 from app.schemas.business import BusinessResponse, CreateBusinessRequest, UpdateBusinessRequest
+from app.utils.datetime_utils import to_iso_utc
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +43,8 @@ def map_tenant_to_response(t: Tenant, total_calls: int = 0, total_leads: int = 0
         total_leads=total_leads,
         qualified_leads=qualified_leads,
         conversion_rate=conversion_rate,
-        created_at=t.created_at.isoformat() if t.created_at else datetime.now(UTC).isoformat(),
-        updated_at=t.updated_at.isoformat() if t.updated_at else None,
+        created_at=to_iso_utc(t.created_at) or to_iso_utc(datetime.now(UTC)),
+        updated_at=to_iso_utc(t.updated_at),
     )
 
 
@@ -80,7 +82,12 @@ class BusinessService:
                 select(func.count(Lead.id)).where(Lead.tenant_id == t.id, Lead.status.in_(["qualified", "interested"]))
             )).scalar() or 0
 
-            responses.append(map_tenant_to_response(t, call_count, lead_count, qual_count))
+            resp = map_tenant_to_response(t, call_count, lead_count, qual_count)
+            agent_ids = (await session.execute(
+                select(Agent.id).where(Agent.tenant_id == t.id)
+            )).scalars().all()
+            resp.assigned_agent_ids = list(dict.fromkeys((t.assigned_agent_ids or []) + list(agent_ids)))
+            responses.append(resp)
         return responses
 
     @staticmethod
@@ -101,7 +108,12 @@ class BusinessService:
             select(func.count(Lead.id)).where(Lead.tenant_id == t.id, Lead.status.in_(["qualified", "interested"]))
         )).scalar() or 0
 
-        return map_tenant_to_response(t, call_count, lead_count, qual_count)
+        resp = map_tenant_to_response(t, call_count, lead_count, qual_count)
+        agent_ids = (await session.execute(
+            select(Agent.id).where(Agent.tenant_id == t.id)
+        )).scalars().all()
+        resp.assigned_agent_ids = list(dict.fromkeys((t.assigned_agent_ids or []) + list(agent_ids)))
+        return resp
 
     @staticmethod
     async def create_business(session: AsyncSession, data: CreateBusinessRequest) -> BusinessResponse:

@@ -53,7 +53,7 @@ export const ModernLeads: React.FC = () => {
   return (
     <div>
       <MPageHeader
-        title="Leads Pipeline"
+        title="Leads"
         subtitle="Every lead captured by your AI callers — with the customer details and the reason, straight from the call."
         actions={
           <>

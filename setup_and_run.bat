@@ -277,7 +277,7 @@ where ngrok >nul 2>&1
 if %errorlevel% equ 0 (
     start "ARB SoftTech Ngrok Tunnel (Port 8001)" cmd /k "title ARB SoftTech Ngrok Tunnel && ngrok http 8001"
 ) else if exist "%BASE_DIR%\bin\ngrok.exe" (
-    start "ARB SoftTech Ngrok Tunnel (Port 8001)" cmd /k "title ARB SoftTech Ngrok Tunnel && "%BASE_DIR%\bin\ngrok.exe" http 8001"
+    start "ARB SoftTech Ngrok Tunnel (Port 8001)" cmd /k "title ARB SoftTech Ngrok Tunnel && ngrok http 8001"
 )
 
 :: Wait 3 seconds for Ngrok using reliable ping

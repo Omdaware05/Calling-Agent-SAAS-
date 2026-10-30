@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, model_validator
+from app.utils.datetime_utils import to_iso_utc
 
 
 class UpdateLeadRequest(BaseModel):
@@ -39,8 +40,8 @@ class LeadResponse(BaseModel):
                 "reasoning": getattr(data, "reason", None),
                 "notes": None,
                 "metadata": getattr(data, "metadata_json", None) or {},
-                "created_at": created.isoformat() if created else "",
-                "updated_at": updated.isoformat() if updated else None,
+                "created_at": to_iso_utc(created) or "",
+                "updated_at": to_iso_utc(updated),
             }
         return data
 

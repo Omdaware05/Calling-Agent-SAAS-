@@ -76,7 +76,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           pulse: activeCount > 0,
         },
         { name: 'Contacts', href: '/contacts', icon: Users },
-        { name: 'Leads Pipeline', href: '/leads', icon: Target },
+        { name: 'Leads', href: '/leads', icon: Target },
         { name: 'Follow-ups', href: '/followups', icon: CalendarClock },
         { name: 'Calendar', href: '/calendar', icon: CalendarDays },
         { name: 'Reports & Analytics', href: '/reports', icon: BarChart3 },

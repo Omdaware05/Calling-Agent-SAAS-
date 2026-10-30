@@ -1,6 +1,7 @@
 import React from 'react';
 import { clsx } from 'clsx';
 import { Info, ArrowUp, ArrowDown } from 'lucide-react';
+import { parseServerDate } from '../../utils/dateUtils';
 
 /**
  * Shared building blocks for the Modern experience.
@@ -213,8 +214,9 @@ export function fmtDuration(totalSeconds?: number | null): string {
 
 export function timeAgo(iso?: string | null): string {
   if (!iso) return '';
-  const then = new Date(iso).getTime();
-  if (isNaN(then)) return '';
+  const d = parseServerDate(iso);
+  if (!d) return '';
+  const then = d.getTime();
   const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;

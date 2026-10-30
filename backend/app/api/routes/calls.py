@@ -24,6 +24,7 @@ from app.services.redis_service import redis_service
 from app.services.storage.s3 import storage_service
 from app.services.telephony_service import telephony_service
 from app.config import settings
+from app.utils.datetime_utils import to_iso_utc
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ def map_call_to_document(c: Call) -> Dict[str, Any]:
             segments.append({
                 "speaker": s.speaker,
                 "text": s.text,
-                "timestamp": c.created_at.isoformat() if c.created_at else "",
+                "timestamp": to_iso_utc(c.created_at) or "",
                 "start_time": s.start_time,
                 "end_time": s.end_time,
             })
@@ -59,10 +60,14 @@ def map_call_to_document(c: Call) -> Dict[str, Any]:
     interest = "uncertain"
     if c.disposition:
         disp_lower = c.disposition.lower()
-        if "interest" in disp_lower and "not" not in disp_lower:
+        if disp_lower in ("interested", "callback_requested", "qualified", "hot") or ("interest" in disp_lower and "not" not in disp_lower):
             interest = "interested"
-        elif "not" in disp_lower:
+        elif "not" in disp_lower or disp_lower in ("not_interested", "rejected", "opt_out", "disqualified"):
             interest = "not_interested"
+        elif disp_lower in ("uncertain", "queued", "pending"):
+            interest = "uncertain"
+        else:
+            interest = disp_lower
 
     recording_url = f"/api/v1/calls/{c.id}/recording"
 
@@ -78,8 +83,8 @@ def map_call_to_document(c: Call) -> Dict[str, Any]:
         "termination_reason": c.termination_reason,
         "duration": c.duration or 0.0,
         "provider": "vobiz",
-        "created_at": c.created_at.isoformat() if c.created_at else datetime.now(UTC).isoformat(),
-        "updated_at": (c.ended_at or c.created_at or datetime.now(UTC)).isoformat(),
+        "created_at": to_iso_utc(c.created_at) or to_iso_utc(datetime.now(UTC)),
+        "updated_at": to_iso_utc(c.ended_at or c.created_at or datetime.now(UTC)),
         "last_interest_status": interest,
         "transcript": {
             "call_id": c.id,
@@ -92,7 +97,7 @@ def map_call_to_document(c: Call) -> Dict[str, Any]:
             "llm_model": getattr(settings, "SARVAM_LLM_MODEL", "sarvam-105b-conversations"),
             "tts_model": getattr(settings, "SARVAM_TTS_MODEL", "bulbul:v3"),
             "segments": segments,
-            "created_at": c.created_at.isoformat() if c.created_at else datetime.now(UTC).isoformat(),
+            "created_at": to_iso_utc(c.created_at) or to_iso_utc(datetime.now(UTC)),
         } if (segments or c.transcript_url) else None,
         "recording": {
             "provider_url": recording_url,
@@ -400,7 +405,7 @@ async def get_call_transcript(
             segments.append({
                 "speaker": s.speaker,
                 "text": s.text,
-                "timestamp": call.created_at.isoformat() if call.created_at else "",
+                "timestamp": to_iso_utc(call.created_at) or "",
                 "start_time": s.start_time,
                 "end_time": s.end_time,
                 "sequence": s.sequence,
@@ -417,7 +422,7 @@ async def get_call_transcript(
         "llm_model": getattr(settings, "SARVAM_LLM_MODEL", "sarvam-105b-conversations"),
         "tts_model": getattr(settings, "SARVAM_TTS_MODEL", "bulbul:v3"),
         "segments": segments,
-        "created_at": call.created_at.isoformat() if call.created_at else datetime.now(UTC).isoformat(),
+        "created_at": to_iso_utc(call.created_at) or to_iso_utc(datetime.now(UTC)),
     }
 
 

@@ -31,6 +31,7 @@ import { agentsApi } from '../../services/api/agents';
 import { callsApi } from '../../services/api/calls';
 import type { CallDocument, LeadDocument } from '../../types/api';
 import { MCard, MStatCard, Avatar, Pill, ScoreBar, scorePct, leadStatusMeta, fmtDuration, timeAgo, primaryPill, whitePill } from './ui';
+import { parseServerDate } from '../../utils/dateUtils';
 
 /* ---------- date bucketing helpers ---------- */
 function dayKey(d: Date): string {
@@ -54,8 +55,11 @@ function lastNDays(n: number): { key: string; label: string }[] {
 function bucketize<T extends { created_at: string }>(items: T[], days: { key: string; label: string }[]) {
   const counts = new Map(days.map((d) => [d.key, 0]));
   for (const it of items) {
-    const k = dayKey(new Date(it.created_at));
-    if (counts.has(k)) counts.set(k, (counts.get(k) || 0) + 1);
+    const d = parseServerDate(it.created_at);
+    if (d) {
+      const k = dayKey(d);
+      if (counts.has(k)) counts.set(k, (counts.get(k) || 0) + 1);
+    }
   }
   return days.map((d) => counts.get(d.key) || 0);
 }
@@ -114,7 +118,7 @@ export const ModernDashboard: React.FC = () => {
   const maxAgentCalls = Math.max(1, ...topAgents.map((t) => t.count));
 
   const latestLeads = [...leads]
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .sort((a, b) => (parseServerDate(b.created_at)?.getTime() || 0) - (parseServerDate(a.created_at)?.getTime() || 0))
     .slice(0, 6);
 
   const hour = new Date().getHours();

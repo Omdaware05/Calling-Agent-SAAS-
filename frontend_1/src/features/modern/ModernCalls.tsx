@@ -7,6 +7,7 @@ import { agentsApi } from '../../services/api/agents';
 import { statsApi } from '../../services/api/stats';
 import type { CallDocument } from '../../types/api';
 import { MCard, MStatCard, MPageHeader, Pill, callStateMeta, fmtDuration, timeAgo } from './ui';
+import { parseServerDate } from '../../utils/dateUtils';
 
 const FILTERS = [
   { id: 'all', label: 'All Calls' },
@@ -36,7 +37,7 @@ export const ModernCalls: React.FC = () => {
   }, [agents]);
 
   const visible = useMemo(() => {
-    const sorted = [...calls].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const sorted = [...calls].sort((a, b) => (parseServerDate(b.created_at)?.getTime() || 0) - (parseServerDate(a.created_at)?.getTime() || 0));
     if (filter === 'all') return sorted;
     if (filter === 'live') return sorted.filter((c) => LIVE_STATES.includes(c.state));
     return sorted.filter((c) => c.state === filter);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { DataTable, Column } from '../../components/ui/DataTable';
@@ -7,16 +7,42 @@ import { StatusIndicator } from '../../components/ui/StatusIndicator';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Select } from '../../components/ui/Select';
+import { MetricCard } from '../../components/ui/MetricCard';
 import { CallDetailDrawer } from '../calls/CallDetailDrawer';
 import { leadsApi } from '../../services/api/leads';
 import { useToast } from '../../app/providers/ToastProvider';
 import { useBusiness } from '../../app/providers/BusinessProvider';
 import { getErrorMessage } from '../../services/api/client';
 import { LeadDocument } from '../../types/api';
-import { Target, Eye, RefreshCw, CheckCircle, Building2, Download } from 'lucide-react';
+import {
+  Target,
+  Eye,
+  RefreshCw,
+  CheckCircle,
+  Building2,
+  Download,
+  Users,
+  TrendingUp,
+  Sparkles,
+  Phone,
+  PhoneCall,
+  Flame,
+  Award,
+  Filter,
+} from 'lucide-react';
 import { format } from 'date-fns';
 import { TimeFilterAndExport } from '../../components/ui/TimeFilterAndExport';
 import { exportToExcel, filterByDateRange, TimeFilterRange } from '../../utils/excelExport';
+import { formatDateTime } from '../../utils/dateUtils';
+
+const STATUS_TABS = [
+  { id: 'all', label: 'All Leads' },
+  { id: 'interested', label: 'Interested' },
+  { id: 'qualified', label: 'Qualified' },
+  { id: 'new', label: 'New' },
+  { id: 'not_interested', label: 'Not Interested' },
+  { id: 'closed', label: 'Closed' },
+] as const;
 
 export const LeadsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -38,17 +64,62 @@ export const LeadsPage: React.FC = () => {
   });
 
   // Filter leads for selected business, pipeline status and date range
-  const displayLeads = React.useMemo(() => {
+  const displayLeads = useMemo(() => {
     let result = leads;
     if (!isAllBusinesses && selectedBusiness) {
-      const agentIds = new Set(selectedBusiness.assignedAgentIds);
-      result = result.filter((l) => !l.agent_id || agentIds.has(l.agent_id));
+      const agentIds = new Set(selectedBusiness.assignedAgentIds || []);
+      result = result.filter((l) => {
+        // Direct tenant match
+        if (l.tenant_id && l.tenant_id === selectedBusiness.id) return true;
+        // Assigned agent match
+        if (l.agent_id && agentIds.has(l.agent_id)) return true;
+        // If business has no specific agents restricted, keep it
+        if (agentIds.size === 0) return true;
+        return !l.agent_id;
+      });
     }
     if (statusFilter !== 'all') {
       result = result.filter((l) => (l.status || 'new').toLowerCase() === statusFilter);
     }
     return filterByDateRange(result, (l) => l.created_at, timeRange);
   }, [leads, selectedBusiness, isAllBusinesses, timeRange, statusFilter]);
+
+  // Overall lead counts for the tabs
+  const scopeLeads = useMemo(() => {
+    let result = leads;
+    if (!isAllBusinesses && selectedBusiness) {
+      const agentIds = new Set(selectedBusiness.assignedAgentIds || []);
+      result = result.filter((l) => {
+        if (l.tenant_id && l.tenant_id === selectedBusiness.id) return true;
+        if (l.agent_id && agentIds.has(l.agent_id)) return true;
+        if (agentIds.size === 0) return true;
+        return !l.agent_id;
+      });
+    }
+    return filterByDateRange(result, (l) => l.created_at, timeRange);
+  }, [leads, selectedBusiness, isAllBusinesses, timeRange]);
+
+  const countsByStatus = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const l of scopeLeads) {
+      const s = (l.status || 'new').toLowerCase();
+      map.set(s, (map.get(s) || 0) + 1);
+    }
+    return map;
+  }, [scopeLeads]);
+
+  // Metric computations
+  const totalLeadsCount = scopeLeads.length;
+  const interestedCount = (countsByStatus.get('interested') || 0) + (countsByStatus.get('qualified') || 0);
+  const conversionPct = totalLeadsCount > 0 ? Math.round((interestedCount / totalLeadsCount) * 100) : 0;
+  const avgScore = useMemo(() => {
+    if (scopeLeads.length === 0) return 0;
+    const total = scopeLeads.reduce((acc, l) => {
+      const raw = l.confidence_score !== undefined && l.confidence_score !== null ? l.confidence_score : ((l as any).score ?? 0);
+      return acc + raw;
+    }, 0);
+    return Math.round((total / scopeLeads.length) * 100);
+  }, [scopeLeads]);
 
   const handleExportExcel = () => {
     const exportRows = displayLeads.map((l) => {
@@ -69,14 +140,13 @@ export const LeadsPage: React.FC = () => {
         'Reasoning': l.reasoning || l.notes || 'N/A',
         'Call ID': l.call_id || 'N/A',
         'Agent ID': l.agent_id || 'N/A',
-        'Captured At': l.created_at ? format(new Date(l.created_at), 'yyyy-MM-dd HH:mm:ss') : 'N/A',
+        'Captured At': formatDateTime(l.created_at, 'yyyy-MM-dd HH:mm:ss'),
       };
     });
     exportToExcel(exportRows, `voxora_leads_pipeline_${statusFilter}_${timeRange}_${format(new Date(), 'yyyyMMdd')}`, 'Leads Pipeline');
   };
 
-  // Server-side workbook (includes extracted customer info + why-reasons
-  // for ALL matching leads, not just the rows loaded on this page).
+  // Server-side workbook
   const handleDownloadServerExcel = async () => {
     setIsDownloading(true);
     try {
@@ -126,13 +196,17 @@ export const LeadsPage: React.FC = () => {
       header: 'Prospect Phone',
       sortable: true,
       render: (lead) => (
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 flex items-center justify-center shrink-0 font-bold text-xs">
-            <Target className="w-3.5 h-3.5" />
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20 flex items-center justify-center shrink-0 font-bold text-xs shadow-sm">
+            <Phone className="w-3.5 h-3.5" />
           </div>
           <div className="flex flex-col">
-            <span className="font-semibold text-xs text-slate-900 dark:text-slate-100">{lead.phone_number}</span>
-            <span className="text-[10px] text-slate-400 font-mono">ID: {lead.lead_id}</span>
+            <span className="font-semibold text-xs text-slate-900 dark:text-slate-100 tracking-wide font-mono">
+              {lead.phone_number}
+            </span>
+            <span className="text-[10px] text-slate-400 font-mono">
+              {formatDateTime(lead.created_at, 'MMM dd · hh:mm a')}
+            </span>
           </div>
         </div>
       ),
@@ -144,19 +218,40 @@ export const LeadsPage: React.FC = () => {
         const ci = lead.metadata?.customer_info || {};
         const name = lead.name || ci.name;
         const email = lead.email || ci.email;
-        const extras = [
-          ci.city,
-          ci.budget_inr ? `₹${ci.budget_inr.toLocaleString('en-IN')}` : null,
-          ci.preferred_callback_time ? `↩ ${ci.preferred_callback_time}` : null,
-        ].filter(Boolean).join(' · ');
-        if (!name && !email && !extras) {
-          return <span className="text-xs text-slate-400">Not stated on call</span>;
+        const city = ci.city;
+        const budget = ci.budget_inr ? `₹${ci.budget_inr.toLocaleString('en-IN')}` : null;
+        const callbackTime = ci.preferred_callback_time ? `↩ ${ci.preferred_callback_time}` : null;
+
+        if (!name && !email && !city && !budget && !callbackTime) {
+          return <span className="text-xs text-slate-400 italic">Not stated on call</span>;
         }
         return (
-          <div className="flex flex-col max-w-[190px]">
-            {name && <span className="font-semibold text-xs text-slate-900 dark:text-slate-100 truncate">{name}</span>}
+          <div className="flex flex-col gap-1 max-w-[210px]">
+            {name ? (
+              <span className="font-semibold text-xs text-slate-900 dark:text-slate-100 truncate flex items-center gap-1.5">
+                {name}
+              </span>
+            ) : (
+              <span className="text-[11px] text-slate-400 font-mono">Prospect</span>
+            )}
             {email && <span className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">{email}</span>}
-            {extras && <span className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">{extras}</span>}
+            <div className="flex items-center gap-1 flex-wrap">
+              {city && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-zinc-300">
+                  📍 {city}
+                </span>
+              )}
+              {budget && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                  {budget}
+                </span>
+              )}
+              {callbackTime && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                  {callbackTime}
+                </span>
+              )}
+            </div>
           </div>
         );
       },
@@ -167,9 +262,12 @@ export const LeadsPage: React.FC = () => {
       render: (lead) => {
         const biz = getBusinessForAgent(lead.agent_id);
         return (
-          <span className="text-xs text-slate-600 dark:text-zinc-400 truncate">
-            {biz ? biz.name : selectedBusiness ? selectedBusiness.name : 'General Account'}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span className="text-xs text-slate-600 dark:text-zinc-300 font-medium truncate max-w-[140px]">
+              {biz ? biz.name : selectedBusiness ? selectedBusiness.name : 'General Account'}
+            </span>
+          </div>
         );
       },
     },
@@ -180,16 +278,36 @@ export const LeadsPage: React.FC = () => {
       render: (lead) => {
         const rawScore = lead.confidence_score !== undefined && lead.confidence_score !== null ? lead.confidence_score : ((lead as any).score ?? 0);
         const pct = Math.round(rawScore * 100);
+        const isHigh = pct >= 70;
+        const isMid = pct >= 40 && pct < 70;
+
         return (
-          <div className="w-24 space-y-1">
+          <div className="w-28 space-y-1.5">
             <div className="flex items-center justify-between text-[11px] font-mono">
-              <span className="text-slate-500">Confidence</span>
-              <strong className="text-emerald-600 dark:text-emerald-400">{pct}%</strong>
+              <span className="text-slate-400 text-[10px] uppercase font-semibold">Intent</span>
+              <strong
+                className={
+                  isHigh
+                    ? 'text-emerald-500 dark:text-emerald-400 flex items-center gap-0.5'
+                    : isMid
+                    ? 'text-amber-500 dark:text-amber-400'
+                    : 'text-slate-500 dark:text-zinc-400'
+                }
+              >
+                {isHigh && <Flame className="w-3 h-3 fill-emerald-500/20" />}
+                {pct}%
+              </strong>
             </div>
-            <div className="w-full h-1 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+            <div className="w-full h-1.5 bg-slate-100 dark:bg-white/[0.08] rounded-full overflow-hidden p-0.5">
               <div
-                className="h-full bg-emerald-500 rounded-full"
-                style={{ width: `${pct}%` }}
+                className={`h-full rounded-full transition-all duration-500 ${
+                  isHigh
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                    : isMid
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-400'
+                    : 'bg-slate-400'
+                }`}
+                style={{ width: `${Math.max(pct, 5)}%` }}
               />
             </div>
           </div>
@@ -227,20 +345,30 @@ export const LeadsPage: React.FC = () => {
           <span
             key={r.reason}
             title={r.evidence ? `Customer said: "${r.evidence}"` : undefined}
-            className={`inline-block px-1.5 py-0.5 rounded-md text-[10px] font-medium leading-tight ${cls}`}
+            className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium leading-tight border transition-colors shadow-2xs ${cls}`}
           >
             {r.reason}
           </span>
         );
         return (
-          <div className="flex flex-col gap-1 max-w-[300px]">
+          <div className="flex flex-col gap-1.5 max-w-[320px]">
             {(whyIn.length > 0 || whyNot.length > 0) && (
               <div className="flex flex-wrap gap-1">
-                {whyIn.map((r) => chip(r, 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'))}
-                {whyNot.map((r) => chip(r, 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'))}
+                {whyIn.map((r) =>
+                  chip(
+                    r,
+                    'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+                  )
+                )}
+                {whyNot.map((r) =>
+                  chip(
+                    r,
+                    'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
+                  )
+                )}
               </div>
             )}
-            <p className="text-xs text-slate-600 dark:text-zinc-400 line-clamp-2">
+            <p className="text-xs text-slate-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
               {lead.reasoning || lead.notes || 'No reason recorded for this lead yet.'}
             </p>
           </div>
@@ -257,6 +385,7 @@ export const LeadsPage: React.FC = () => {
             variant="outline"
             size="xs"
             onClick={() => handleOpenEdit(lead)}
+            className="hover:border-orange-500/40 hover:text-orange-500"
           >
             Update
           </Button>
@@ -265,7 +394,8 @@ export const LeadsPage: React.FC = () => {
               variant="ghost"
               size="xs"
               onClick={() => setSelectedCallId(lead.call_id)}
-              leftIcon={<Eye className="w-3 h-3" />}
+              leftIcon={<Eye className="w-3 h-3 text-orange-500" />}
+              className="hover:bg-orange-500/10 hover:text-orange-500"
             >
               Call
             </Button>
@@ -279,10 +409,10 @@ export const LeadsPage: React.FC = () => {
     <div className="space-y-6">
       <PageHeader
         category={isAllBusinesses ? 'CRM & Pipeline' : `Leads: ${selectedBusiness?.name}`}
-        title="Leads Pipeline"
+        title="Leads"
         subtitle={
           isAllBusinesses
-            ? 'Every lead captured by AI voice telecallers — with the customer details and the reason (interested or not) extracted from each call.'
+            ? 'Every lead captured by AI voice telecallers — with extracted customer details, intent qualification, and dialogue evidence.'
             : `Customer leads captured for ${selectedBusiness?.name}, with call-extracted details and AI reasons.`
         }
         actions={
@@ -295,9 +425,9 @@ export const LeadsPage: React.FC = () => {
               >
                 <option value="all">All Statuses</option>
                 <option value="interested">Interested</option>
-                <option value="not_interested">Not Interested</option>
-                <option value="new">New</option>
                 <option value="qualified">Qualified</option>
+                <option value="new">New</option>
+                <option value="not_interested">Not Interested</option>
                 <option value="closed">Closed</option>
               </Select>
             </div>
@@ -329,17 +459,92 @@ export const LeadsPage: React.FC = () => {
         }
       />
 
-      <DataTable
-        columns={columns}
-        data={displayLeads}
-        isLoading={isLoading}
-        keyExtractor={(l) => l.lead_id}
-        searchPlaceholder="Filter leads by phone, name, email or status..."
-        searchableKey={(l) => `${l.phone_number} ${l.status || ''} ${l.reasoning || ''} ${l.name || ''} ${l.email || ''} ${l.metadata?.customer_info?.city || ''}`}
-        emptyTitle="No leads captured yet"
-        emptyDescription="Analyzed calls will automatically appear here as leads, with their extracted customer details and reasons."
-        pageSize={10}
-      />
+      {/* KPI Metric Overview Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard
+          label="Total Leads Captured"
+          value={totalLeadsCount}
+          subtext="Extracted from phone calls"
+          icon={<Target className="w-5 h-5 text-orange-500" />}
+          isLoading={isLoading}
+        />
+        <MetricCard
+          label="Interested & Qualified"
+          value={interestedCount}
+          subtext={`${conversionPct}% pipeline interest rate`}
+          icon={<CheckCircle className="w-5 h-5 text-emerald-500" />}
+          glow={interestedCount > 0}
+          isLoading={isLoading}
+        />
+        <MetricCard
+          label="Avg. AI Confidence"
+          value={`${avgScore}%`}
+          subtext="Intent scoring accuracy"
+          icon={<Award className="w-5 h-5 text-indigo-500" />}
+          isLoading={isLoading}
+        />
+        <MetricCard
+          label="Conversion Readiness"
+          value={interestedCount}
+          subtext="Actionable callback candidates"
+          icon={<PhoneCall className="w-5 h-5 text-amber-500" />}
+          isLoading={isLoading}
+        />
+      </div>
+
+      {/* Quick Status Pill Bar */}
+      <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-slate-900/5 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.06] overflow-x-auto">
+        <div className="flex items-center gap-1.5 px-2 text-xs font-semibold text-slate-400">
+          <Filter className="w-3.5 h-3.5" />
+          <span>Stage:</span>
+        </div>
+        {STATUS_TABS.map((tab) => {
+          const isActive = statusFilter === tab.id;
+          const count = tab.id === 'all' ? scopeLeads.length : countsByStatus.get(tab.id) || 0;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setStatusFilter(tab.id)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 ${
+                isActive
+                  ? 'bg-orange-500 text-white shadow-sm font-semibold'
+                  : 'text-slate-600 dark:text-zinc-300 hover:bg-slate-200/60 dark:hover:bg-white/[0.06]'
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span
+                className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                  isActive
+                    ? 'bg-white/20 text-white'
+                    : 'bg-slate-200 dark:bg-white/[0.08] text-slate-500 dark:text-zinc-400'
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Main Leads Data Table */}
+      <div className="rounded-2xl border border-slate-200/80 dark:border-white/[0.06] bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm overflow-hidden shadow-sm">
+        <DataTable
+          columns={columns}
+          data={displayLeads}
+          isLoading={isLoading}
+          keyExtractor={(l) => l.lead_id}
+          searchPlaceholder="Filter leads by phone, customer name, email, city, status or AI reasons..."
+          searchableKey={(l) =>
+            `${l.phone_number} ${l.status || ''} ${l.reasoning || ''} ${l.name || ''} ${l.email || ''} ${
+              l.metadata?.customer_info?.city || ''
+            }`
+          }
+          emptyTitle="No leads captured yet"
+          emptyDescription="Analyzed calls will automatically appear here as leads, with their extracted customer details and reasons."
+          pageSize={10}
+        />
+      </div>
 
       {/* Edit Lead Status Modal */}
       <Modal

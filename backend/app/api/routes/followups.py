@@ -12,6 +12,7 @@ from app.models.lead import Followup
 from app.models.call import Call, Transcript, TranscriptSegment
 from app.models.agent import Agent
 from app.schemas.lead import FollowupResponse, UpdateFollowupRequest
+from app.utils.datetime_utils import to_iso_utc, ensure_utc
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +28,11 @@ def map_followup_to_response(f: Followup) -> FollowupResponse:
         agent_id=f.agent_id,
         call_id=f.call_id,
         phone_number=f.phone_number,
-        scheduled_at=f.scheduled_at.isoformat() if f.scheduled_at else None,
+        scheduled_at=to_iso_utc(f.scheduled_at),
         status=f.status or "pending",
         notes=f.notes,
-        created_at=f.created_at.isoformat() if f.created_at else datetime.now(UTC).isoformat(),
-        updated_at=f.updated_at.isoformat() if f.updated_at else None,
+        created_at=to_iso_utc(f.created_at) or to_iso_utc(datetime.now(UTC)),
+        updated_at=to_iso_utc(f.updated_at),
     )
 
 
@@ -79,7 +80,7 @@ async def sync_qualifying_calls_to_followups(db: AsyncSession):
                 tr_text = "\n".join(f"{s.speaker}: {s.text}" for s in tr.segments)
             
             parsed_time = schedule_from_transcript(tr_text) if tr_text else None
-            sched = parsed_time or (now + timedelta(hours=2))
+            sched = ensure_utc(parsed_time) or (now + timedelta(hours=2)).replace(tzinfo=None)
             time_str = sched.strftime('%d %b %Y, %I:%M %p') if parsed_time else 'as requested'
             notes = f"Customer requested callback for {time_str}. (Action: Schedule callback)"
             status_val = "scheduled"
@@ -237,7 +238,7 @@ async def update_followup(followup_id: str, payload: UpdateFollowupRequest, db: 
         f.notes = payload.notes
     if payload.scheduled_at is not None:
         try:
-            f.scheduled_at = datetime.fromisoformat(payload.scheduled_at.replace("Z", "+00:00"))
+            f.scheduled_at = ensure_utc(datetime.fromisoformat(payload.scheduled_at.replace("Z", "+00:00")))
         except Exception:
             pass
 

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.campaign import Campaign, CampaignContact
 from app.models.call import Call
 from app.schemas.campaign import CampaignResponse, CreateCampaignRequest
+from app.utils.datetime_utils import to_iso_utc
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +33,8 @@ def map_campaign_to_response(
         total_contacts=calc_total,
         completed_calls=completed_calls,
         pending_calls=max(0, calc_pending),
-        created_at=c.created_at.isoformat() if c.created_at else datetime.now(UTC).isoformat(),
-        updated_at=c.updated_at.isoformat() if c.updated_at else None,
+        created_at=to_iso_utc(c.created_at) or to_iso_utc(datetime.now(UTC)),
+        updated_at=to_iso_utc(c.updated_at),
     )
 
 

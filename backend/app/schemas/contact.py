@@ -22,6 +22,10 @@ class ContactResponse(BaseModel):
     phone_number: str
     email: Optional[str] = None
     status: str = "active"
+    interaction_count: int = 0
+    last_call_id: Optional[str] = None
+    last_interest_status: Optional[str] = None
+    last_call_at: Optional[str] = None
     custom_fields: Dict[str, Any] = Field(default_factory=dict)
     created_at: str
     updated_at: Optional[str] = None

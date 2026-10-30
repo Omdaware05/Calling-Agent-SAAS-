@@ -60,7 +60,7 @@ if %errorlevel% equ 0 (
     start "ARB SoftTech Ngrok Tunnel (Port 8001)" cmd /k "title ARB SoftTech Ngrok Tunnel && ngrok http 8001"
     echo [OK] Ngrok tunnel window launched.
 ) else if exist "%BASE_DIR%\bin\ngrok.exe" (
-    start "ARB SoftTech Ngrok Tunnel (Port 8001)" cmd /k "title ARB SoftTech Ngrok Tunnel && "%BASE_DIR%\bin\ngrok.exe" http 8001"
+    start "ARB SoftTech Ngrok Tunnel (Port 8001)" cmd /k "title ARB SoftTech Ngrok Tunnel && ngrok http 8001"
     echo [OK] Ngrok tunnel window launched from bin\ngrok.exe.
 ) else (
     echo [WARNING] Ngrok binary not found! Telecom webhooks will require BACKEND_PUBLIC_URL.

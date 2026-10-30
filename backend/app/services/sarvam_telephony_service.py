@@ -21,6 +21,7 @@ from app.database import AsyncSessionLocal
 from app.models.agent import Agent
 from app.models.call import Call, Recording, Transcript, TranscriptSegment
 from app.services.storage.s3 import storage_service
+from app.utils.datetime_utils import ensure_utc
 
 logger = logging.getLogger("sarvam_telephony")
 
@@ -33,13 +34,24 @@ class SarvamTelephonyService:
     """
 
     def __init__(self):
-        self.sarvam_api_key = settings.SARVAM_API_KEY
+        self._sarvam_api_key = settings.SARVAM_API_KEY
         self.tts_model = getattr(settings, "SARVAM_TTS_MODEL", "bulbul:v3")
         self.stt_model = getattr(settings, "SARVAM_STT_MODEL", "saaras:v3")
         self.llm_model = getattr(settings, "SARVAM_LLM_MODEL", "sarvam-105b-conversations")
         self.default_voice = getattr(settings, "SARVAM_DEFAULT_VOICE", "shubh")
         self._http_client: Optional[httpx.AsyncClient] = None
         self._tts_cache: Dict[str, bytes] = {}
+
+    @property
+    def sarvam_api_key(self) -> str:
+        key = getattr(self, "_sarvam_api_key", None)
+        if not key:
+            key = getattr(settings, "SARVAM_API_KEY", "") or os.getenv("SARVAM_API_KEY", "")
+        return (key or "").strip()
+
+    @sarvam_api_key.setter
+    def sarvam_api_key(self, value: str):
+        self._sarvam_api_key = value
 
     def get_http_client(self) -> httpx.AsyncClient:
         if self._http_client is None or self._http_client.is_closed:
@@ -201,7 +213,8 @@ class SarvamTelephonyService:
 
         xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Stream bidirectional="true" contentType="audio/x-mulaw;rate=8000">{stream_url}</Stream>
+    <Stream bidirectional="true" keepCallAlive="true" contentType="audio/x-mulaw;rate=8000">{stream_url}</Stream>
+    <Wait length="3600" />
 </Response>"""
         return xml
 
@@ -1323,7 +1336,7 @@ class SarvamTelephonyService:
         try:
             while True:
                 try:
-                    msg_text = await asyncio.wait_for(websocket.receive_text(), timeout=6.0)
+                    msg_text = await asyncio.wait_for(websocket.receive_text(), timeout=15.0)
                 except asyncio.TimeoutError:
                     logger.info(f"[SarvamTelephony] Inactivity watchdog: zero audio received for 6.0s on call {call_id} (caller disconnected). Concluding call.")
                     break
@@ -1595,7 +1608,7 @@ class SarvamTelephonyService:
                                 fu_stmt = select(Followup).where(Followup.call_id == call.id)
                                 existing_fu = (await session.execute(fu_stmt)).scalar_one_or_none()
                                 notes_txt = f"{reason_action}. (Matched: '{matched_text or 'callback'}')"
-                                target_time = sched_time or (datetime.now(UTC) + timedelta(hours=2))
+                                target_time = ensure_utc(sched_time) or (datetime.now(UTC) + timedelta(hours=2)).replace(tzinfo=None)
 
                                 if not existing_fu:
                                     new_fu = Followup(

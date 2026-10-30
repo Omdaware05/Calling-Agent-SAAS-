@@ -101,20 +101,29 @@ export const CallStateBadge: React.FC<{ state: CallState; size?: 'xs' | 'sm' | '
 };
 
 // Specialized Interest Badge
-export const InterestBadge: React.FC<{ status?: InterestStatus | null; size?: 'xs' | 'sm' | 'md' }> = ({
+export const InterestBadge: React.FC<{ status?: InterestStatus | string | null; size?: 'xs' | 'sm' | 'md' }> = ({
   status,
   size = 'sm',
 }) => {
-  switch (status) {
+  const s = String(status || '').toLowerCase();
+  switch (s) {
     case 'interested':
+    case 'callback_requested':
+    case 'qualified':
+    case 'hot':
       return <Badge variant="success" size={size} dot>Interested</Badge>;
     case 'not_interested':
+    case 'rejected':
+    case 'opt_out':
+    case 'disqualified':
       return <Badge variant="danger" size={size} dot>Not Interested</Badge>;
     case 'uncertain':
       return <Badge variant="warning" size={size} dot>Uncertain</Badge>;
     case 'processing':
+    case 'analyzing':
       return <Badge variant="default" size={size} dot pulse>Analyzing</Badge>;
     case 'pending':
+    case 'queued':
       return <Badge variant="default" size={size}>Pending</Badge>;
     case 'failed':
       return <Badge variant="danger" size={size}>Failed</Badge>;

@@ -449,11 +449,43 @@ Return ONLY a valid JSON object with these exact keys:
                     if customer_info.get("email"):
                         existing_lead.email = customer_info["email"]
                     session.add(existing_lead)
-            elif status != "uncertain":
-                # Not genuinely interested -> remove FALSE leads from the
-                # pipeline. An "uncertain" verdict must not destroy a lead.
-                if existing_lead:
-                    await session.delete(existing_lead)
+            elif status == "not_interested" or (not is_interested and status != "uncertain"):
+                lead_metadata = {
+                    "classification": classification_str or "NOT_INTERESTED",
+                    "interest_strength": interest_strength_str or "NONE",
+                    "signals": signals,
+                    "rule_applied": rule_applied,
+                    "analyzer": "gemini",
+                    "customer_info": customer_info,
+                    "why_interested": why_interested,
+                    "why_not_interested": why_not_interested or ([{"reason": reasoning or "Customer not interested", "evidence": ""}] if reasoning else []),
+                }
+                phone = customer_info.get("phone") or call.phone_number
+                if not existing_lead:
+                    existing_lead = Lead(
+                        tenant_id=call.tenant_id,
+                        agent_id=call.agent_id,
+                        contact_id=call.contact_id,
+                        call_id=call.id,
+                        name=customer_info.get("name"),
+                        email=customer_info.get("email"),
+                        phone_number=phone,
+                        score=confidence if confidence is not None else 0.15,
+                        reason=reasoning or "Customer indicated they are not interested.",
+                        status="not_interested",
+                        metadata_json=lead_metadata,
+                    )
+                    session.add(existing_lead)
+                else:
+                    existing_lead.score = confidence if confidence is not None else 0.15
+                    existing_lead.reason = reasoning or "Customer indicated they are not interested."
+                    existing_lead.status = "not_interested"
+                    existing_lead.metadata_json = lead_metadata
+                    if customer_info.get("name"):
+                        existing_lead.name = customer_info["name"]
+                    if customer_info.get("email"):
+                        existing_lead.email = customer_info["email"]
+                    session.add(existing_lead)
 
             # Check follow-up detector
             followup_info = None
@@ -585,9 +617,42 @@ Return ONLY a valid JSON object with these exact keys:
                         if customer_info.get("email"):
                             lead.email = customer_info["email"]
                         session.add(lead)
-                else:
-                    if lead:
-                        await session.delete(lead)
+                elif diag.classification == IntentClassification.NOT_INTERESTED or diag.binary_classification == "NOT_INTERESTED":
+                    lead_metadata = {
+                        "classification": "NOT_INTERESTED",
+                        "interest_strength": "NONE",
+                        "signals": list(diag.signals_detected) if diag.signals_detected else [],
+                        "rule_applied": "IntentClassifier Local Rule",
+                        "analyzer": "rule_classifier",
+                        "customer_info": customer_info,
+                        "why_interested": why_interested,
+                        "why_not_interested": why_not_interested or [{"reason": diag.reason or "Customer declined", "evidence": ""}],
+                    }
+                    if not lead:
+                        lead = Lead(
+                            tenant_id=call.tenant_id,
+                            agent_id=call.agent_id,
+                            contact_id=call.contact_id,
+                            call_id=call.id,
+                            name=customer_info.get("name"),
+                            email=customer_info.get("email"),
+                            phone_number=customer_info.get("phone") or call.phone_number,
+                            score=confidence if confidence is not None else 0.15,
+                            reason=diag.reason or "Customer indicated they are not interested.",
+                            status="not_interested",
+                            metadata_json=lead_metadata,
+                        )
+                        session.add(lead)
+                    else:
+                        lead.score = confidence if confidence is not None else 0.15
+                        lead.reason = diag.reason or "Customer indicated they are not interested."
+                        lead.status = "not_interested"
+                        lead.metadata_json = lead_metadata
+                        if customer_info.get("name"):
+                            lead.name = customer_info["name"]
+                        if customer_info.get("email"):
+                            lead.email = customer_info["email"]
+                        session.add(lead)
 
                 keywords = list(diag.signals_detected) if diag.signals_detected else []
                 if diag.languages_detected:

@@ -16,6 +16,7 @@ import { CalendarClock, RefreshCw, CheckCircle, PhoneCall } from 'lucide-react';
 import { format } from 'date-fns';
 import { TimeFilterAndExport } from '../../components/ui/TimeFilterAndExport';
 import { exportToExcel, filterByDateRange, TimeFilterRange } from '../../utils/excelExport';
+import { formatDateTime, toLocalDatetimeInput, isFollowupDue } from '../../utils/dateUtils';
 
 export const FollowupsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -39,13 +40,7 @@ export const FollowupsPage: React.FC = () => {
   }, [followups, timeRange]);
 
   const dueCount = React.useMemo(() => {
-    const now = Date.now();
-    return followups.filter(
-      (f) =>
-        (f.status === 'scheduled' || f.status === 'pending') &&
-        f.scheduled_at &&
-        new Date(f.scheduled_at).getTime() <= now
-    ).length;
+    return followups.filter((f) => isFollowupDue(f.scheduled_at, f.status)).length;
   }, [followups]);
 
   const handleExportExcel = () => {
@@ -53,10 +48,10 @@ export const FollowupsPage: React.FC = () => {
       'Follow-up ID': f.followup_id,
       'Contact Phone Number': f.phone_number,
       'Status': f.status,
-      'Scheduled Callback Time': f.scheduled_at ? format(new Date(f.scheduled_at), 'yyyy-MM-dd HH:mm:ss') : 'N/A',
+      'Scheduled Callback Time': formatDateTime(f.scheduled_at, 'yyyy-MM-dd HH:mm:ss'),
       'Detected Reason & Action': f.notes || 'N/A',
       'Associated Call ID': f.call_id || 'N/A',
-      'Created At': f.created_at ? format(new Date(f.created_at), 'yyyy-MM-dd HH:mm:ss') : 'N/A',
+      'Created At': formatDateTime(f.created_at, 'yyyy-MM-dd HH:mm:ss'),
     }));
     exportToExcel(exportRows, `voxora_followups_${timeRange}_${format(new Date(), 'yyyyMMdd')}`, 'Follow-ups');
   };
@@ -109,11 +104,7 @@ export const FollowupsPage: React.FC = () => {
     setEditingFollowup(f);
     setStatus(f.status || 'scheduled');
     setNotes(f.notes || '');
-    try {
-      setScheduledAt(new Date(f.scheduled_at).toISOString().slice(0, 16));
-    } catch {
-      setScheduledAt('');
-    }
+    setScheduledAt(toLocalDatetimeInput(f.scheduled_at));
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -151,12 +142,12 @@ export const FollowupsPage: React.FC = () => {
       header: 'Scheduled Callback Time',
       sortable: true,
       render: (f) => {
-        const isDue = (f.status === 'scheduled' || f.status === 'pending') && f.scheduled_at && new Date(f.scheduled_at).getTime() <= Date.now();
+        const isDue = isFollowupDue(f.scheduled_at, f.status);
         try {
           return (
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-mono font-medium text-slate-700 dark:text-zinc-300">
-                {format(new Date(f.scheduled_at), 'MMM dd, yyyy · HH:mm')}
+                {formatDateTime(f.scheduled_at, 'MMM dd, yyyy · hh:mm a')}
               </span>
               {isDue && (
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse">

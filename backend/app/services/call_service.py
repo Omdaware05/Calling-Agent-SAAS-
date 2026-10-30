@@ -23,6 +23,7 @@ from app.services.dograh_service import DograhServiceException, dograh_service
 from app.services.lead_intelligence_service import lead_intelligence_service
 from app.services.redis_service import redis_service
 from app.services.storage.s3 import storage_service
+from app.utils.datetime_utils import ensure_utc, to_iso_utc
 
 logger = logging.getLogger(__name__)
 
@@ -474,15 +475,15 @@ async def persist_post_call_artifacts(session: AsyncSession, call: Call, payload
 
                 parsed_time = schedule_from_transcript(transcript_text) if transcript_text else None
                 sched_iso = f_info.get("suggested_scheduled_at")
-                scheduled_time = parsed_time
+                scheduled_time = ensure_utc(parsed_time)
 
                 if not scheduled_time and sched_iso:
                     try:
-                        scheduled_time = datetime.fromisoformat(sched_iso.replace("Z", "+00:00"))
+                        scheduled_time = ensure_utc(datetime.fromisoformat(sched_iso.replace("Z", "+00:00")))
                     except Exception:
                         pass
                 if not scheduled_time:
-                    scheduled_time = datetime.now(UTC) + timedelta(hours=2)
+                    scheduled_time = (datetime.now(UTC) + timedelta(hours=2)).replace(tzinfo=None)
 
                 time_note = f" for {scheduled_time.strftime('%d %b %Y, %I:%M %p')}" if parsed_time else ""
                 f_notes = f"{cat_name}: {action}{time_note}. (Matched: '{matched or 'N/A'}')"

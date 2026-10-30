@@ -15,6 +15,7 @@ import { format } from 'date-fns';
 import { useSearchParams } from 'react-router-dom';
 import { TimeFilterAndExport } from '../../components/ui/TimeFilterAndExport';
 import { exportToExcel, filterByDateRange, TimeFilterRange } from '../../utils/excelExport';
+import { formatDateTime } from '../../utils/dateUtils';
 
 export const CallsPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -81,7 +82,7 @@ export const CallsPage: React.FC = () => {
       'Provider': c.provider || 'vobiz',
       'Duration (sec)': c.duration ?? 0,
       'Agent ID': c.agent_id || 'N/A',
-      'Created At': c.created_at ? format(new Date(c.created_at), 'yyyy-MM-dd HH:mm:ss') : 'N/A',
+      'Created At': formatDateTime(c.created_at, 'yyyy-MM-dd HH:mm:ss'),
       'Recording': c.recording?.provider_url || c.recording?.local_path || 'N/A',
     }));
     exportToExcel(exportRows, `voxora_call_history_${timeRange}_${format(new Date(), 'yyyyMMdd')}`, 'Call History');
@@ -134,7 +135,7 @@ export const CallsPage: React.FC = () => {
         try {
           return (
             <span className="text-xs text-slate-500 dark:text-neutral-400 font-mono">
-              {format(new Date(call.created_at), 'MMM dd, yyyy HH:mm:ss')}
+              {formatDateTime(call.created_at, 'MMM dd, yyyy · hh:mm:ss a')}
             </span>
           );
         } catch {

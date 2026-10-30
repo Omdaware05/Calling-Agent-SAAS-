@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Drawer } from '../../components/ui/Drawer';
 import { AudioPlayer } from '../../components/ui/AudioPlayer';
 import { CallStateBadge, ProviderBadge, InterestBadge } from '../../components/ui/Badge';
@@ -23,6 +23,7 @@ import {
   Check,
 } from 'lucide-react';
 import { CallDocument, TranscriptSegment } from '../../types/api';
+import { formatDateTime } from '../../utils/dateUtils';
 
 export interface CallDetailDrawerProps {
   callId: string | null;
@@ -31,6 +32,7 @@ export interface CallDetailDrawerProps {
 
 export const CallDetailDrawer: React.FC<CallDetailDrawerProps> = ({ callId, onClose }) => {
   const toast = useToast();
+  const queryClient = useQueryClient();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -52,6 +54,31 @@ export const CallDetailDrawer: React.FC<CallDetailDrawerProps> = ({ callId, onCl
     enabled: !!callId,
   });
 
+  const effectiveInterestStatus = React.useMemo(() => {
+    const fromInterest = interest?.status?.toLowerCase();
+    if (fromInterest && fromInterest !== 'uncertain') {
+      if (['interested', 'callback_requested', 'qualified', 'hot'].includes(fromInterest)) return 'interested';
+      if (['not_interested', 'rejected', 'opt_out', 'disqualified'].includes(fromInterest)) return 'not_interested';
+      return fromInterest;
+    }
+
+    const fromDisp = call?.disposition?.toLowerCase();
+    if (fromDisp) {
+      if (['interested', 'callback_requested', 'qualified', 'hot'].includes(fromDisp)) return 'interested';
+      if (['not_interested', 'rejected', 'opt_out', 'disqualified'].includes(fromDisp)) return 'not_interested';
+      if (fromDisp !== 'uncertain' && fromDisp !== 'queued') return fromDisp;
+    }
+
+    const fromLast = (call?.last_interest_status as string)?.toLowerCase();
+    if (fromLast && fromLast !== 'uncertain') {
+      if (['interested', 'callback_requested', 'qualified', 'hot'].includes(fromLast)) return 'interested';
+      if (['not_interested', 'rejected', 'opt_out', 'disqualified'].includes(fromLast)) return 'not_interested';
+      return fromLast;
+    }
+
+    return fromInterest || fromLast || 'uncertain';
+  }, [interest, call]);
+
   const handleCopyId = (id: string) => {
     navigator.clipboard.writeText(id);
     setCopied(true);
@@ -64,8 +91,10 @@ export const CallDetailDrawer: React.FC<CallDetailDrawerProps> = ({ callId, onCl
     setIsAnalyzing(true);
     try {
       await callsApi.analyzeInterest(callId);
-      toast.success('Interest Analysis Started', 'Classifier dispatched for call transcript.');
-      refetchInterest();
+      toast.success('Interest Analysis Complete', 'Lead qualification and status updated.');
+      await Promise.all([refetchInterest(), refetchCall()]);
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['calls'] });
     } catch (err: any) {
       toast.error('Analysis Failed', getErrorMessage(err));
     } finally {
@@ -127,7 +156,7 @@ export const CallDetailDrawer: React.FC<CallDetailDrawerProps> = ({ callId, onCl
                   </span>
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5" />
-                    {new Date(call.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {formatDateTime(call.created_at, 'MMM dd, hh:mm a')}
                   </span>
                 </div>
               </div>
@@ -135,7 +164,7 @@ export const CallDetailDrawer: React.FC<CallDetailDrawerProps> = ({ callId, onCl
 
             {/* Interest quick tag */}
             <div className="flex items-center gap-2">
-              <InterestBadge status={interest?.status || call.last_interest_status as any} />
+              <InterestBadge status={effectiveInterestStatus as any} />
               <Button
                 variant="secondary"
                 size="xs"
@@ -164,7 +193,7 @@ export const CallDetailDrawer: React.FC<CallDetailDrawerProps> = ({ callId, onCl
                   <span className="text-xs font-bold text-slate-900 dark:text-white">
                     Lead Interest Intelligence
                   </span>
-                  <InterestBadge status={interest.status} size="xs" />
+                  <InterestBadge status={effectiveInterestStatus as any} size="xs" />
                 </div>
                 <div className="text-xs font-mono font-semibold text-orange-400">
                   Confidence: {Math.round((interest.confidence_score || 0) * 100)}%
@@ -250,7 +279,7 @@ export const CallDetailDrawer: React.FC<CallDetailDrawerProps> = ({ callId, onCl
                   )}
                   {interest.followup.suggested_scheduled_at && (
                     <div className="text-[10px] font-mono text-amber-600 dark:text-amber-400">
-                      Auto-scheduled target: {new Date(interest.followup.suggested_scheduled_at).toLocaleString()}
+                      Auto-scheduled target: {formatDateTime(interest.followup.suggested_scheduled_at, 'MMM dd, yyyy · hh:mm a')}
                     </div>
                   )}
                 </div>
@@ -301,11 +330,7 @@ export const CallDetailDrawer: React.FC<CallDetailDrawerProps> = ({ callId, onCl
                           <span className="font-semibold uppercase">{turn.speaker}</span>
                           {turn.timestamp && (
                             <span>
-                              {new Date(turn.timestamp).toLocaleTimeString([], {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                second: '2-digit',
-                              })}
+                              {formatDateTime(turn.timestamp, 'hh:mm:ss a')}
                             </span>
                           )}
                         </div>

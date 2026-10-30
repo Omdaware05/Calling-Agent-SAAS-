@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.utils.datetime_utils import to_iso_utc
 from app.dependencies import verify_app_client
 from app.models.call import Call
 from app.models.lead import Followup, Lead
@@ -111,7 +112,7 @@ async def calendar_day(
                 "agent_id": c.agent_id,
                 "state": (c.status or "").upper(),
                 "duration": c.duration,
-                "created_at": c.created_at.isoformat() if c.created_at else None,
+                "created_at": to_iso_utc(c.created_at),
             }
             for c in calls
         ],
@@ -122,7 +123,7 @@ async def calendar_day(
                 "phone_number": l.phone_number,
                 "status": l.status,
                 "score": l.score,
-                "created_at": l.created_at.isoformat() if l.created_at else None,
+                "created_at": to_iso_utc(l.created_at),
             }
             for l in leads
         ],
@@ -132,7 +133,7 @@ async def calendar_day(
                 "phone_number": f.phone_number,
                 "status": f.status,
                 "notes": f.notes,
-                "scheduled_at": f.scheduled_at.isoformat() if f.scheduled_at else None,
+                "scheduled_at": to_iso_utc(f.scheduled_at),
             }
             for f in followups
         ],

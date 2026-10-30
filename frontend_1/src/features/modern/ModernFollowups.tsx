@@ -6,9 +6,11 @@ import { useToast } from '../../app/providers/ToastProvider';
 import { getErrorMessage } from '../../services/api/client';
 import type { FollowupDocument } from '../../types/api';
 import { MCard, MStatCard, MPageHeader, Pill } from './ui';
+import { parseServerDate, formatDateTime } from '../../utils/dateUtils';
 
 function dayBucket(iso: string): 'overdue' | 'today' | 'upcoming' {
-  const d = new Date(iso);
+  const d = parseServerDate(iso);
+  if (!d) return 'upcoming';
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const startOfTomorrow = startOfToday + 24 * 3600 * 1000;
@@ -64,7 +66,7 @@ export const ModernFollowups: React.FC = () => {
     const by = (b: string) =>
       open
         .filter((f) => dayBucket(f.scheduled_at) === b)
-        .sort((a, b2) => new Date(a.scheduled_at).getTime() - new Date(b2.scheduled_at).getTime());
+        .sort((a, b2) => (parseServerDate(a.scheduled_at)?.getTime() || 0) - (parseServerDate(b2.scheduled_at)?.getTime() || 0));
     return { overdue: by('overdue'), today: by('today'), upcoming: by('upcoming'), done: done.length, open: open.length };
   }, [followups]);
 
@@ -98,7 +100,7 @@ export const ModernFollowups: React.FC = () => {
                   <p className="text-xs text-[#98A2B3] truncate">{f.notes || 'Scheduled callback'}</p>
                 </div>
                 <span className="hidden sm:block text-[13px] font-semibold text-[#344054]">
-                  {new Date(f.scheduled_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
+                  {formatDateTime(f.scheduled_at, 'd MMM, hh:mm a')}
                 </span>
                 <Pill tone={tone}>{title}</Pill>
                 <div className="flex items-center gap-2 shrink-0">

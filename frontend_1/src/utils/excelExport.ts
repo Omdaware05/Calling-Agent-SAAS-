@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { isAfter, subDays, startOfDay } from 'date-fns';
+import { parseServerDate } from './dateUtils';
 
 export type TimeFilterRange = 'all' | 'day' | 'week' | 'month';
 
@@ -34,8 +35,8 @@ export function filterByDateRange<T>(
     const raw = getDateStr(item);
     if (!raw) return false;
     try {
-      const dt = typeof raw === 'string' ? new Date(raw) : raw;
-      if (isNaN(dt.getTime())) return false;
+      const dt = parseServerDate(raw);
+      if (!dt || isNaN(dt.getTime())) return false;
       return isAfter(dt, thresholdDate) || dt.getTime() === thresholdDate.getTime();
     } catch {
       return false;
