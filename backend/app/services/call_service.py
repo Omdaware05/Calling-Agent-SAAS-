@@ -420,7 +420,10 @@ async def persist_post_call_artifacts(session: AsyncSession, call: Call, payload
             is_no_answer = call.status in ("no_answer", "unanswered") or (call.termination_reason or "").lower() in ("no_answer", "unanswered")
             is_failed = call.status in ("failed", "cancelled") or (call.termination_reason or "").lower() in ("failed", "cancelled")
 
-            if call_phone and (is_busy or is_no_answer or is_failed):
+            # Never schedule retries for system/account failures like insufficient balance
+            is_balance_error = "insufficient" in (call.termination_reason or "").lower() or (call.disposition or "").lower() == "insufficient_balance"
+
+            if call_phone and not is_balance_error and (is_busy or is_no_answer or is_failed):
                 if is_busy:
                     scheduled_time = datetime.now(UTC) + timedelta(minutes=30)
                     status_notes = "Category 2: PHONE / LINE BUSY. Status: busy. Action: Retry call after 30 minutes"

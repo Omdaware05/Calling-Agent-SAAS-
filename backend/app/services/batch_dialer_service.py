@@ -83,7 +83,7 @@ class BatchDialerService:
         # Carrier trunk stagger delay on initial worker startup:
         # Prevents concurrent workers from hammering VoBiz / telecom trunk at the exact same millisecond
         if worker_index > 1:
-            stagger_sec = (worker_index - 1) * 2.5
+            stagger_sec = (worker_index - 1) * 3.0
             logger.info(f"[BatchDialer] Worker #{worker_index} staggering initial dispatch by {stagger_sec}s for carrier trunk isolation...")
             await asyncio.sleep(stagger_sec)
 
@@ -106,8 +106,8 @@ class BatchDialerService:
                     async with self._dispatch_lock:
                         now_m = time.monotonic()
                         elapsed = now_m - self._last_dispatch_time
-                        if elapsed < 2.5:
-                            wait_time = 2.5 - elapsed
+                        if elapsed < 3.0:
+                            wait_time = 3.0 - elapsed
                             logger.info(f"[BatchDialer] Spacing carrier dispatch: waiting {wait_time:.2f}s before dialing Call {call_id}...")
                             await asyncio.sleep(wait_time)
                         self._last_dispatch_time = time.monotonic()
