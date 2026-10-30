@@ -195,7 +195,7 @@ class SarvamTelephonyService:
 
         xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Stream bidirectional="true" keepCallAlive="true" contentType="audio/x-mulaw;rate=8000">{stream_url}</Stream>
+    <Stream bidirectional="true" contentType="audio/x-mulaw;rate=8000">{stream_url}</Stream>
 </Response>"""
         return xml
 
@@ -842,10 +842,12 @@ class SarvamTelephonyService:
         recorded_timeline: List[tuple] = []
 
         barge_in_streak = 0
+        agent_speech_started_time = 0.0
 
         async def play_audio_task(mulaw_data: bytes):
-            nonlocal is_agent_speaking, agent_finished_speaking_time
+            nonlocal is_agent_speaking, agent_finished_speaking_time, agent_speech_started_time
             is_agent_speaking = True
+            agent_speech_started_time = time.time()
 
             def on_chunk(chunk: bytes):
                 recorded_timeline.append((time.time() - call_start_time, "agent", chunk))
@@ -1280,7 +1282,11 @@ class SarvamTelephonyService:
 
         try:
             while True:
-                msg_text = await websocket.receive_text()
+                try:
+                    msg_text = await asyncio.wait_for(websocket.receive_text(), timeout=6.0)
+                except asyncio.TimeoutError:
+                    logger.info(f"[SarvamTelephony] Inactivity watchdog: zero audio received for 6.0s on call {call_id} (caller disconnected). Concluding call.")
+                    break
                 msg = json.loads(msg_text)
                 event = msg.get("event")
 
@@ -1315,12 +1321,15 @@ class SarvamTelephonyService:
                     rms = audioop.rms(pcm_chunk, 2)
                     recorded_timeline.append((now - call_start_time, "customer", chunk))
 
-                    # 1. Caller Barge-In: If agent is speaking, interrupt ONLY on genuine sustained speech
-                    # (prevents single-packet line pops/clicks from cutting off agent or greeting)
+                    # 1. Caller Barge-In with Acoustic Echo Immunity:
+                    # Protect agent from self-interrupting on phone speakerphone echo.
+                    # First 1.5s of any agent utterance is completely immune to barge-in.
+                    # Afterward, require genuine loud caller speech (RMS > 1600 for >= 6 chunks = 120ms).
                     if is_agent_speaking:
-                        if rms > 580:
+                        time_since_speech_started = now - agent_speech_started_time
+                        if time_since_speech_started > 1.5 and rms > 1600:
                             barge_in_streak += 1
-                            if barge_in_streak >= 3:
+                            if barge_in_streak >= 6:
                                 logger.info(f"[SarvamTelephony] Caller interrupted agent (RMS: {rms}, streak: {barge_in_streak}). Clearing playback buffer.")
                                 if current_turn_task and not current_turn_task.done():
                                     current_turn_task.cancel()
