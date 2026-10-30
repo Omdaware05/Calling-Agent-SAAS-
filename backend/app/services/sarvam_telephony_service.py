@@ -299,7 +299,7 @@ class SarvamTelephonyService:
             "बाद में बात", "बाद में करो", "अभी बिजी", "बिजी हूँ", "व्यस्त हूँ", "गलत नंबर", "रॉन्ग नंबर",
             "not interested", "no thanks", "don't call", "cut the call", "cut it", "hang up",
             "stop calling", "wrong number", "busy right now", "call later", "bye", "अलविदा",
-            "बंद करो", "रख दीजिए", "नही चाहिए", "काट दिजिये", "काट दीजिये", "काट",
+            "बंद करो", "रख दीजिए", "नही चाहिए", "काट दिजिये", "काट दीजिये",
             "नको", "नाही", "नको मला", "काही नको", "रुचि नहीं", "इंटरेस्ट नहीं", "नॉट इंटरेस्टेड",
             "nahi chahiye", "nahi lena", "nahi re", "nahi bhai", "no need", "not needed",
             "interest nahi", "nahi hai", "not really"
@@ -307,11 +307,13 @@ class SarvamTelephonyService:
         if any(k in t for k in refusal_keywords):
             return True
 
-        # Standalone negative response words
-        clean_words = [w.strip("।,?!.") for w in t.split()]
-        if any(w in [
-            "नहीं", "नही", "ना", "no", "nahi", "nahin", "nope", "not", "nako", "नाही", "नको"
-        ] for w in clean_words[:2]):
+        # Standalone negative response words: only trigger if utterance is strictly a short standalone refusal
+        clean_words = [w.strip("।,?!.") for w in t.split() if w.strip("।,?!.")]
+        if len(clean_words) == 1 and clean_words[0] in [
+            "नहीं", "नही", "ना", "no", "nahi", "nahin", "nope", "nako", "नाही"
+        ]:
+            return True
+        if len(clean_words) == 2 and clean_words[0] in ["नहीं", "नही", "ना", "no", "nahi", "nahin", "nope", "nako", "नाही"] and clean_words[1] in ["जी", "भाई", "सर", "thanks", "धन्यवाद", "sir", "madam", "re", "नको"]:
             return True
 
         return False
@@ -932,7 +934,7 @@ class SarvamTelephonyService:
                 "busy right now", "नंतर बोला ना", "नंतर करा", "बाद में करना", "कल कॉल", "उद्या फोन",
                 "उद्या करा", "नंतर सांगतो", "बाद में बताऊंगा"
             ]
-            if any(k in user_text.lower() for k in callback_keywords):
+            if greeting_delivered and any(k in user_text.lower() for k in callback_keywords):
                 logger.info(f"[SarvamTelephony] Caller requested callback / busy: '{user_text}'. Concluding with callback promise.")
                 if "mr" in lang_code:
                     cb_farewell = "नक्कीच! आम्ही तुम्हाला नंतर सोयीच्या वेळी पुन्हा कॉल करू. वेळ दिल्याबद्दल खूप धन्यवाद, नमस्कार!"
@@ -994,7 +996,7 @@ class SarvamTelephonyService:
                 return
 
             # 2. Check if caller refused, declined, or requested call disconnection
-            if self.is_refusal_or_call_termination(user_text):
+            if greeting_delivered and self.is_refusal_or_call_termination(user_text):
                 logger.info(f"[SarvamTelephony] Caller declined / said NO: '{user_text}'. Concluding and cutting call {call_id} immediately.")
                 conversation_history.append({"role": "assistant", "content": farewell_reply})
 
@@ -1295,7 +1297,7 @@ class SarvamTelephonyService:
 
                     # Fallback watchdog: if caller stays silent for 5.0 seconds after connect, gently initiate greeting
                     if not greeting_delivered and not is_agent_speaking and not is_user_speaking:
-                        if (now - call_start_time) > 5.0 and len(audio_buffer) == 0:
+                        if (now - call_start_time) > 1.2 and len(audio_buffer) == 0:
                             logger.info(f"[SarvamTelephony] Caller silent after connect (5.0s). Delivering opening greeting to streamId: {stream_id}")
                             greeting_delivered = True
                             greeting_started_time = now

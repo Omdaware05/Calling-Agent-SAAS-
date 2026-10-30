@@ -136,12 +136,19 @@ async def vobiz_recording_callback(call_id: str, request: Request):
     from app.models.call import Call
     try:
         hangup_cause = str(data.get("HangupCause") or data.get("hangup_cause") or "").upper()
+        hangup_cause_name = str(data.get("HangupCauseName") or data.get("hangup_cause_name") or "").strip()
+        hangup_source = str(data.get("HangupSource") or data.get("hangup_source") or "").strip()
         call_status_raw = str(data.get("CallStatus") or data.get("call_status") or "").lower()
         duration_raw = float(data.get("Duration") or data.get("duration") or 0.0)
 
         async with AsyncSessionLocal() as session:
             call_obj = await session.get(Call, call_id)
             if call_obj and call_obj.status not in ("completed", "failed", "busy", "no_answer", "cancelled"):
+                if hangup_cause_name:
+                    call_obj.termination_reason = f"{hangup_cause_name} ({hangup_source})" if hangup_source else hangup_cause_name
+                elif hangup_cause:
+                    call_obj.termination_reason = hangup_cause
+
                 if "BUSY" in hangup_cause or call_status_raw == "busy":
                     call_obj.status = "busy"
                 elif "NO_ANSWER" in hangup_cause or "TIMEOUT" in hangup_cause or call_status_raw == "no-answer":
@@ -156,7 +163,7 @@ async def vobiz_recording_callback(call_id: str, request: Request):
 
                 call_obj.ended_at = datetime.now(UTC)
                 await session.commit()
-                logger.info(f"[VoBiz Direct] Marked Call {call_id} as '{call_obj.status}' via hangup webhook")
+                logger.info(f"[VoBiz Direct] Marked Call {call_id} as '{call_obj.status}' (reason: {call_obj.termination_reason}) via hangup webhook")
     except Exception as h_err:
         logger.warning(f"[VoBiz Direct] Error updating call status in hangup webhook: {h_err}")
     return {"status": "ok", "call_id": call_id}
@@ -184,12 +191,19 @@ async def vobiz_hangup_webhook(call_id: str, request: Request):
     from app.models.call import Call
     try:
         hangup_cause = str(data.get("HangupCause") or data.get("hangup_cause") or "").upper()
+        hangup_cause_name = str(data.get("HangupCauseName") or data.get("hangup_cause_name") or "").strip()
+        hangup_source = str(data.get("HangupSource") or data.get("hangup_source") or "").strip()
         call_status_raw = str(data.get("CallStatus") or data.get("call_status") or "").lower()
         duration_raw = float(data.get("Duration") or data.get("duration") or 0.0)
 
         async with AsyncSessionLocal() as session:
             call_obj = await session.get(Call, call_id)
             if call_obj and call_obj.status not in ("completed", "failed", "busy", "no_answer", "cancelled"):
+                if hangup_cause_name:
+                    call_obj.termination_reason = f"{hangup_cause_name} ({hangup_source})" if hangup_source else hangup_cause_name
+                elif hangup_cause:
+                    call_obj.termination_reason = hangup_cause
+
                 if "BUSY" in hangup_cause or call_status_raw == "busy":
                     call_obj.status = "busy"
                 elif "NO_ANSWER" in hangup_cause or "TIMEOUT" in hangup_cause or call_status_raw == "no-answer":
@@ -204,7 +218,7 @@ async def vobiz_hangup_webhook(call_id: str, request: Request):
 
                 call_obj.ended_at = datetime.now(UTC)
                 await session.commit()
-                logger.info(f"[VoBiz Direct] Marked Call {call_id} as '{call_obj.status}' via hangup webhook")
+                logger.info(f"[VoBiz Direct] Marked Call {call_id} as '{call_obj.status}' (reason: {call_obj.termination_reason}) via hangup webhook")
     except Exception as h_err:
         logger.warning(f"[VoBiz Direct] Error updating call status in hangup webhook: {h_err}")
     return {"status": "ok", "call_id": call_id}

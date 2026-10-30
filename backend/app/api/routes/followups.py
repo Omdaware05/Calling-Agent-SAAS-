@@ -37,21 +37,15 @@ def map_followup_to_response(f: Followup) -> FollowupResponse:
 
 async def sync_qualifying_calls_to_followups(db: AsyncSession):
     """
-    Evaluates all qualifying calls:
-    1. Calls where the customer requested a callback (callback_requested) with exact time extracted.
-    2. Unanswered, busy, failed, line busy, and short disconnects.
-    Ensures each has a corresponding Followup record in PostgreSQL.
+    Evaluates qualifying calls:
+    Only calls where the customer explicitly requested a callback (callback_requested)
+    with exact time extracted from transcript are added to Scheduled Follow-ups.
+    (Carrier busy or unanswered attempts are not spammed into Scheduled Follow-ups).
     """
     try:
-        qualifying_statuses = ["busy", "line_busy", "no_answer", "unanswered", "failed", "cancelled"]
         stmt = (
             select(Call)
-            .where(
-                (Call.status.in_(qualifying_statuses))
-                | (Call.termination_reason.in_(qualifying_statuses))
-                | (Call.disposition == "callback_requested")
-                | ((Call.duration != None) & (Call.duration < 5.0) & (Call.status.notin_(["initiating", "ringing", "in_progress"])))
-            )
+            .where(Call.disposition == "callback_requested")
             .order_by(Call.created_at.desc())
             .limit(100)
         )
@@ -72,44 +66,23 @@ async def sync_qualifying_calls_to_followups(db: AsyncSession):
             if call.id in existing_call_ids:
                 continue
 
-            call_phone = call.phone_number or call.caller_number
+            call_phone = call.phone_number or getattr(call, "caller_number", None)
             if not call_phone:
                 continue
 
-            st = (call.status or "").lower()
-            term = (call.termination_reason or "").lower()
-            disp = (call.disposition or "").lower()
-
-            if disp == "callback_requested":
-                from app.services.callback_time import schedule_from_transcript
-                tr_stmt = select(Transcript).options(selectinload(Transcript.segments)).where(Transcript.call_id == call.id)
-                tr_res = await db.execute(tr_stmt)
-                tr = tr_res.scalar_one_or_none()
-                tr_text = ""
-                if tr and tr.segments:
-                    tr_text = "\n".join(f"{s.speaker}: {s.text}" for s in tr.segments)
-                
-                parsed_time = schedule_from_transcript(tr_text) if tr_text else None
-                sched = parsed_time or (now + timedelta(hours=2))
-                time_str = sched.strftime('%d %b %Y, %I:%M %p') if parsed_time else 'as requested'
-                notes = f"Customer requested callback for {time_str}. (Action: Schedule callback)"
-                status_val = "scheduled"
-            elif st in ("busy", "line_busy") or term in ("busy", "line_busy"):
-                sched = now + timedelta(minutes=30)
-                notes = "Category 2: PHONE / LINE BUSY. Status: busy. Action: Retry call after 30 minutes"
-                status_val = "pending"
-            elif st in ("no_answer", "unanswered") or term in ("no_answer", "unanswered"):
-                sched = now + timedelta(minutes=60)
-                notes = "Category 3: CALL NOT ANSWERED / NO RESPONSE. Status: no_answer. Action: Retry call in 1 hour"
-                status_val = "pending"
-            elif st in ("failed", "cancelled") or term in ("failed", "cancelled"):
-                sched = now + timedelta(minutes=45)
-                notes = f"Category 4: CALL DISCONNECTED WITHOUT CONVERSATION. Status: {call.status}. Action: Retry call in 45 minutes"
-                status_val = "pending"
-            else:
-                sched = now + timedelta(minutes=60)
-                notes = "Category 3: CALL NOT ANSWERED / NO RESPONSE. Action: Retry call in 1 hour. (Matched: 'Short call / no conversation')"
-                status_val = "pending"
+            from app.services.callback_time import schedule_from_transcript
+            tr_stmt = select(Transcript).options(selectinload(Transcript.segments)).where(Transcript.call_id == call.id)
+            tr_res = await db.execute(tr_stmt)
+            tr = tr_res.scalar_one_or_none()
+            tr_text = ""
+            if tr and tr.segments:
+                tr_text = "\n".join(f"{s.speaker}: {s.text}" for s in tr.segments)
+            
+            parsed_time = schedule_from_transcript(tr_text) if tr_text else None
+            sched = parsed_time or (now + timedelta(hours=2))
+            time_str = sched.strftime('%d %b %Y, %I:%M %p') if parsed_time else 'as requested'
+            notes = f"Customer requested callback for {time_str}. (Action: Schedule callback)"
+            status_val = "scheduled"
 
             new_f = Followup(
                 tenant_id=call.tenant_id,

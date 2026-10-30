@@ -28,6 +28,8 @@ class BatchDialerService:
         self._queues: Dict[str, asyncio.Queue] = {}
         self._workers: Dict[str, List[asyncio.Task]] = {}
         self._lock = asyncio.Lock()
+        self._dispatch_lock = asyncio.Lock()
+        self._last_dispatch_time = 0.0
 
     def _get_queue(self, agent_id: str) -> asyncio.Queue:
         if agent_id not in self._queues:
@@ -78,6 +80,13 @@ class BatchDialerService:
 
         from app.services.call_service import call_service
 
+        # Carrier trunk stagger delay on initial worker startup:
+        # Prevents concurrent workers from hammering VoBiz / telecom trunk at the exact same millisecond
+        if worker_index > 1:
+            stagger_sec = (worker_index - 1) * 2.5
+            logger.info(f"[BatchDialer] Worker #{worker_index} staggering initial dispatch by {stagger_sec}s for carrier trunk isolation...")
+            await asyncio.sleep(stagger_sec)
+
         while True:
             try:
                 # Wait for next call_id, idle timeout of 90s if queue stays empty
@@ -91,9 +100,18 @@ class BatchDialerService:
 
                 logger.info(f"[BatchDialer] Worker #{worker_index} handling Call {call_id}. Remaining in queue: {queue.qsize()}")
 
-                # Step 1: Dispatch call out to carrier
+                # Step 1: Dispatch call out to carrier with rate-limit separation
                 try:
-                    call = await call_service.dispatch_existing_call(call_id)
+                    import time
+                    async with self._dispatch_lock:
+                        now_m = time.monotonic()
+                        elapsed = now_m - self._last_dispatch_time
+                        if elapsed < 2.5:
+                            wait_time = 2.5 - elapsed
+                            logger.info(f"[BatchDialer] Spacing carrier dispatch: waiting {wait_time:.2f}s before dialing Call {call_id}...")
+                            await asyncio.sleep(wait_time)
+                        self._last_dispatch_time = time.monotonic()
+                        call = await call_service.dispatch_existing_call(call_id)
                 except Exception as dispatch_err:
                     logger.error(f"[BatchDialer] Error dispatching call {call_id}: {dispatch_err}", exc_info=True)
                     async with AsyncSessionLocal() as session:
