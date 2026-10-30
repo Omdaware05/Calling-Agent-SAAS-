@@ -61,10 +61,10 @@ export const MStatCard: React.FC<{
               {deltaPct >= 0 ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
               {Math.abs(deltaPct).toFixed(0)}%
             </span>
-            <span className="text-[13px] text-[#98A2B3] dark:text-neutral-400">{deltaCaption}</span>
+            <span className="text-[13px] text-[#667085] dark:text-neutral-400">{deltaCaption}</span>
           </>
         ) : (
-          <span className="text-[13px] text-[#98A2B3] dark:text-neutral-400">{subtext || ''}</span>
+          <span className="text-[13px] text-[#667085] dark:text-neutral-400">{subtext || ''}</span>
         )}
       </div>
     </div>
@@ -229,6 +229,6 @@ export function timeAgo(iso?: string | null): string {
 export const MEmpty: React.FC<{ title: string; text?: string }> = ({ title, text }) => (
   <div className="py-12 text-center">
     <p className="text-sm font-semibold text-[#344054] dark:text-neutral-300">{title}</p>
-    {text && <p className="text-[13px] text-[#98A2B3] dark:text-neutral-400 mt-1">{text}</p>}
+    {text && <p className="text-[13px] text-[#667085] dark:text-neutral-400 mt-1">{text}</p>}
   </div>
 );

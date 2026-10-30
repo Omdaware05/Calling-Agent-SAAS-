@@ -244,6 +244,7 @@ export interface CallRecordingInfo {
 
 export interface CallDocument {
   call_id: string;
+  tenant_id?: string | null;
   disposition?: string | null;
   termination_reason?: string | null;
   campaign_id?: string | null;
@@ -349,13 +350,16 @@ export interface AgentInterestAnalytics {
 
 export interface ContactDocument {
   contact_id: string;
+  tenant_id?: string | null;
   phone_number: string;
   name?: string | null;
   email?: string | null;
   agent_id?: string | null;
+  status?: string | null;
   custom_fields: Record<string, any>;
   interaction_count: number;
   last_call_id?: string | null;
+  last_call_at?: string | null;
   last_interest_status?: InterestStatus | null;
   created_at: string;
   updated_at: string;
@@ -432,6 +436,7 @@ export interface LeadDocument {
 
 export interface FollowupDocument {
   followup_id: string;
+  tenant_id?: string | null;
   lead_id?: string | null;
   call_id?: string | null;
   agent_id?: string | null;

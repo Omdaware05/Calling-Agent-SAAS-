@@ -16,6 +16,7 @@ import { leadsApi } from '../../services/api/leads';
 import { agentsApi } from '../../services/api/agents';
 import type { CallDocument, LeadDocument } from '../../types/api';
 import { MCard, MStatCard, MPageHeader, Avatar, fmtDuration } from './ui';
+import { parseServerDate } from '../../utils/dateUtils';
 
 function dayKey(d: Date): string {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
@@ -51,10 +52,13 @@ export const ModernReports: React.FC = () => {
     }
     const idx = new Map(days.map((d, i) => [d.key, i]));
     for (const c of calls) {
-      const i = idx.get(dayKey(new Date(c.created_at)));
-      if (i !== undefined) {
-        days[i].Calls += 1;
-        if (c.state === 'COMPLETED') days[i].Completed += 1;
+      const dt = parseServerDate(c.created_at);
+      if (dt) {
+        const i = idx.get(dayKey(dt));
+        if (i !== undefined) {
+          days[i].Calls += 1;
+          if (c.state === 'COMPLETED') days[i].Completed += 1;
+        }
       }
     }
     return days;
@@ -116,7 +120,7 @@ export const ModernReports: React.FC = () => {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
         <MCard className="p-6 xl:col-span-2">
           <h3 className="text-[15px] font-bold text-[#101828]">Call Volume</h3>
-          <p className="text-xs text-[#98A2B3] mt-0.5">Calls placed vs completed · last 14 days</p>
+          <p className="text-xs text-[#667085] mt-0.5">Calls placed vs completed · last 14 days</p>
           <div className="h-[250px] mt-4">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={last14} margin={{ top: 4, right: 4, bottom: 0, left: -20 }} barCategoryGap="28%">
@@ -136,9 +140,9 @@ export const ModernReports: React.FC = () => {
 
         <MCard className="p-6">
           <h3 className="text-[15px] font-bold text-[#101828]">Lead Breakdown</h3>
-          <p className="text-xs text-[#98A2B3] mt-0.5">Where leads stand right now</p>
+          <p className="text-xs text-[#667085] mt-0.5">Where leads stand right now</p>
           <div className="space-y-4 mt-5">
-            {leadDist.length === 0 && <p className="text-[13px] text-[#98A2B3]">No leads yet.</p>}
+            {leadDist.length === 0 && <p className="text-[13px] text-[#667085]">No leads yet.</p>}
             {leadDist.map((d) => (
               <div key={d.status}>
                 <div className="flex items-center justify-between text-[13px] mb-1.5">
@@ -156,9 +160,9 @@ export const ModernReports: React.FC = () => {
 
       <MCard className="p-6">
         <h3 className="text-[15px] font-bold text-[#101828] mb-1">Agent Performance</h3>
-        <p className="text-xs text-[#98A2B3]">Calls, completions and leads per agent</p>
+        <p className="text-xs text-[#667085]">Calls, completions and leads per agent</p>
         <div className="divide-y divide-[#F1F2F4] mt-2">
-          {agentPerf.length === 0 && <p className="text-[13px] text-[#98A2B3] py-4">No agent activity yet.</p>}
+          {agentPerf.length === 0 && <p className="text-[13px] text-[#667085] py-4">No agent activity yet.</p>}
           {agentPerf.map(({ agent, calls: c, completed, leads: l }) => (
             <div key={agent.agent_id} className="flex items-center gap-4 py-3.5">
               <Avatar name={agent.name} className="w-9 h-9 text-xs" />
@@ -169,9 +173,9 @@ export const ModernReports: React.FC = () => {
                 </div>
               </div>
               <div className="flex gap-6 text-right shrink-0">
-                <span className="hidden sm:block"><span className="block text-sm font-bold text-[#101828] tabular-nums">{c}</span><span className="text-[10.5px] text-[#98A2B3] font-medium">Calls</span></span>
-                <span className="hidden sm:block"><span className="block text-sm font-bold text-[#101828] tabular-nums">{completed}</span><span className="text-[10.5px] text-[#98A2B3] font-medium">Completed</span></span>
-                <span><span className="block text-sm font-bold text-emerald-600 tabular-nums">{l}</span><span className="text-[10.5px] text-[#98A2B3] font-medium">Leads</span></span>
+                <span className="hidden sm:block"><span className="block text-sm font-bold text-[#101828] tabular-nums">{c}</span><span className="text-[10.5px] text-[#667085] font-medium">Calls</span></span>
+                <span className="hidden sm:block"><span className="block text-sm font-bold text-[#101828] tabular-nums">{completed}</span><span className="text-[10.5px] text-[#667085] font-medium">Completed</span></span>
+                <span><span className="block text-sm font-bold text-emerald-600 tabular-nums">{l}</span><span className="text-[10.5px] text-[#667085] font-medium">Leads</span></span>
               </div>
             </div>
           ))}

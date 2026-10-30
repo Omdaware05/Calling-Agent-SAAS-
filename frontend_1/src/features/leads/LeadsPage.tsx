@@ -69,13 +69,9 @@ export const LeadsPage: React.FC = () => {
     if (!isAllBusinesses && selectedBusiness) {
       const agentIds = new Set(selectedBusiness.assignedAgentIds || []);
       result = result.filter((l) => {
-        // Direct tenant match
         if (l.tenant_id && l.tenant_id === selectedBusiness.id) return true;
-        // Assigned agent match
         if (l.agent_id && agentIds.has(l.agent_id)) return true;
-        // If business has no specific agents restricted, keep it
-        if (agentIds.size === 0) return true;
-        return !l.agent_id;
+        return false;
       });
     }
     if (statusFilter !== 'all') {
@@ -92,8 +88,7 @@ export const LeadsPage: React.FC = () => {
       result = result.filter((l) => {
         if (l.tenant_id && l.tenant_id === selectedBusiness.id) return true;
         if (l.agent_id && agentIds.has(l.agent_id)) return true;
-        if (agentIds.size === 0) return true;
-        return !l.agent_id;
+        return false;
       });
     }
     return filterByDateRange(result, (l) => l.created_at, timeRange);

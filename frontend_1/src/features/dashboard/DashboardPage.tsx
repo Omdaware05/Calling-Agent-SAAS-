@@ -184,12 +184,13 @@ export const DashboardPage: React.FC = () => {
 
   const recentCalls: CallDocument[] = React.useMemo(() => {
     if (isAllBusinesses) return allRecentCalls;
+    if (scopedAgents.length === 0) return [];
     if (agentDashboard?.recent_calls && agentDashboard.recent_calls.length > 0) {
       return agentDashboard.recent_calls;
     }
     const agentIds = new Set(scopedAgents.map((a) => a.agent_id));
-    return allRecentCalls.filter((c) => !c.agent_id || agentIds.has(c.agent_id));
-  }, [isAllBusinesses, allRecentCalls, agentDashboard, scopedAgents]);
+    return allRecentCalls.filter((c) => (c.tenant_id === selectedBusiness?.id) || (c.agent_id && agentIds.has(c.agent_id)));
+  }, [isAllBusinesses, allRecentCalls, agentDashboard, scopedAgents, selectedBusiness]);
 
   const handleDownloadPdf = () => {
     const targetBusiness: Business = selectedBusiness || {

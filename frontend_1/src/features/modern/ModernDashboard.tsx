@@ -29,6 +29,7 @@ import { statsApi } from '../../services/api/stats';
 import { leadsApi } from '../../services/api/leads';
 import { agentsApi } from '../../services/api/agents';
 import { callsApi } from '../../services/api/calls';
+import { useBusiness } from '../../app/providers/BusinessProvider';
 import type { CallDocument, LeadDocument } from '../../types/api';
 import { MCard, MStatCard, Avatar, Pill, ScoreBar, scorePct, leadStatusMeta, fmtDuration, timeAgo, primaryPill, whitePill } from './ui';
 import { parseServerDate } from '../../utils/dateUtils';
@@ -76,6 +77,7 @@ function pctChange(series: number[]): number | null {
 /* ---------- page ---------- */
 export const ModernDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { selectedBusiness, isAllBusinesses } = useBusiness();
 
   const { data: stats } = useQuery({ queryKey: ['global-stats'], queryFn: statsApi.getStats, refetchInterval: 15000 });
   const { data: leads = [] } = useQuery<LeadDocument[]>({
@@ -90,19 +92,52 @@ export const ModernDashboard: React.FC = () => {
     refetchInterval: 15000,
   });
 
+  // Scope calls, leads and agents to selected business
+  const scopedCalls = useMemo(() => {
+    if (isAllBusinesses || !selectedBusiness) return calls;
+    const assignedSet = new Set(selectedBusiness.assignedAgentIds || []);
+    return calls.filter((c) => {
+      if ((c as any).tenant_id && (c as any).tenant_id === selectedBusiness.id) return true;
+      if ((c as any).business_id && (c as any).business_id === selectedBusiness.id) return true;
+      if (c.agent_id && assignedSet.has(c.agent_id)) return true;
+      return false;
+    });
+  }, [calls, selectedBusiness, isAllBusinesses]);
+
+  const scopedLeads = useMemo(() => {
+    if (isAllBusinesses || !selectedBusiness) return leads;
+    const assignedSet = new Set(selectedBusiness.assignedAgentIds || []);
+    return leads.filter((l) => {
+      if (l.tenant_id && l.tenant_id === selectedBusiness.id) return true;
+      if (l.agent_id && assignedSet.has(l.agent_id)) return true;
+      return false;
+    });
+  }, [leads, selectedBusiness, isAllBusinesses]);
+
+  const scopedAgents = useMemo(() => {
+    if (isAllBusinesses || !selectedBusiness) return agents;
+    const assignedSet = new Set(selectedBusiness.assignedAgentIds || []);
+    return agents.filter((a) => (a as any).tenant_id === selectedBusiness.id || assignedSet.has(a.agent_id));
+  }, [agents, selectedBusiness, isAllBusinesses]);
+
   const days = useMemo(() => lastNDays(14), []);
-  const callsPerDay = useMemo(() => bucketize(calls, days), [calls, days]);
-  const leadsPerDay = useMemo(() => bucketize(leads, days), [leads, days]);
+  const callsPerDay = useMemo(() => bucketize(scopedCalls, days), [scopedCalls, days]);
+  const leadsPerDay = useMemo(() => bucketize(scopedLeads, days), [scopedLeads, days]);
   const activity = days.map((d, i) => ({ ...d, Calls: callsPerDay[i], Leads: leadsPerDay[i] }));
 
-  const interested = leads.filter((l) => ['interested', 'qualified'].includes((l.status || '').toLowerCase())).length;
-  const interestedRate = leads.length ? Math.round((interested / leads.length) * 100) : 0;
+  const interested = scopedLeads.filter((l) => ['interested', 'qualified'].includes((l.status || '').toLowerCase())).length;
+  const interestedRate = scopedLeads.length ? Math.round((interested / scopedLeads.length) * 100) : 0;
+
+  const completedCount = isAllBusinesses ? (stats?.completed || 0) : scopedCalls.filter(c => c.state === 'COMPLETED').length;
+  const failedCount = isAllBusinesses ? (stats?.failed || 0) : scopedCalls.filter(c => c.state === 'FAILED').length;
+  const busyCount = isAllBusinesses ? (stats?.busy || 0) : scopedCalls.filter(c => c.state === 'BUSY').length;
+  const noAnswerCount = isAllBusinesses ? (stats?.no_answer || 0) : scopedCalls.filter(c => c.state === 'NO_ANSWER').length;
 
   const outcomeData = [
-    { name: 'Completed', value: stats?.completed || 0, color: '#10B981' },
-    { name: 'Failed', value: stats?.failed || 0, color: '#F43F5E' },
-    { name: 'Busy', value: stats?.busy || 0, color: '#F59E0B' },
-    { name: 'No answer', value: stats?.no_answer || 0, color: '#C4CBD4' },
+    { name: 'Completed', value: completedCount, color: '#10B981' },
+    { name: 'Failed', value: failedCount, color: '#F43F5E' },
+    { name: 'Busy', value: busyCount, color: '#F59E0B' },
+    { name: 'No answer', value: noAnswerCount, color: '#C4CBD4' },
   ];
   const outcomeTotal = outcomeData.reduce((a, b) => a + b.value, 0);
 
@@ -111,13 +146,13 @@ export const ModernDashboard: React.FC = () => {
     for (const c of calls) if (c.agent_id) map.set(c.agent_id, (map.get(c.agent_id) || 0) + 1);
     return map;
   }, [calls]);
-  const topAgents = [...agents]
+  const topAgents = [...scopedAgents]
     .map((a) => ({ agent: a, count: callsByAgent.get(a.agent_id) || 0 }))
     .sort((x, y) => y.count - x.count)
     .slice(0, 5);
   const maxAgentCalls = Math.max(1, ...topAgents.map((t) => t.count));
 
-  const latestLeads = [...leads]
+  const latestLeads = [...scopedLeads]
     .sort((a, b) => (parseServerDate(b.created_at)?.getTime() || 0) - (parseServerDate(a.created_at)?.getTime() || 0))
     .slice(0, 6);
 
@@ -128,14 +163,14 @@ export const ModernDashboard: React.FC = () => {
   const kpis = [
     {
       label: 'Total Calls',
-      value: (stats?.total_calls ?? calls.length).toLocaleString('en-IN'),
+      value: (isAllBusinesses ? (stats?.total_calls ?? calls.length) : scopedCalls.length).toLocaleString('en-IN'),
       icon: PhoneCall,
       iconClass: 'bg-[#FFF1E6] text-[#EA580C]',
       deltaPct: pctChange(callsPerDay),
     },
     {
       label: 'Leads Captured',
-      value: leads.length.toLocaleString('en-IN'),
+      value: scopedLeads.length.toLocaleString('en-IN'),
       icon: Target,
       iconClass: 'bg-[#E7F8EE] text-[#16A34A]',
       deltaPct: pctChange(leadsPerDay),
@@ -145,7 +180,7 @@ export const ModernDashboard: React.FC = () => {
       value: `${interestedRate}%`,
       icon: Heart,
       iconClass: 'bg-[#F1EAFE] text-[#7C3AED]',
-      subtext: `${interested} of ${leads.length} leads`,
+      subtext: `${interested} of ${scopedLeads.length} leads`,
     },
     {
       label: 'Avg. Call Duration',
@@ -193,7 +228,7 @@ export const ModernDashboard: React.FC = () => {
             <div className="flex items-start justify-between mb-1">
               <div>
                 <h3 className="text-[15px] font-bold text-[#101828]">Call Activity</h3>
-                <p className="text-xs text-[#98A2B3] mt-0.5">Calls placed and leads captured · last 14 days</p>
+                <p className="text-xs text-[#667085] mt-0.5">Calls placed and leads captured · last 14 days</p>
               </div>
               <div className="flex items-center gap-4 text-xs font-medium text-[#667085]">
                 <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#F97316]" /> Calls</span>
@@ -231,7 +266,7 @@ export const ModernDashboard: React.FC = () => {
         <MCard className="p-6">
           <div className="anim-enter" style={{ animationDelay: '190ms' }}>
             <h3 className="text-[15px] font-bold text-[#101828]">Call Outcomes</h3>
-            <p className="text-xs text-[#98A2B3] mt-0.5">How calls are ending</p>
+            <p className="text-xs text-[#667085] mt-0.5">How calls are ending</p>
             <div className="relative w-[168px] h-[168px] mx-auto my-4">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -253,7 +288,7 @@ export const ModernDashboard: React.FC = () => {
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <span className="text-[26px] font-bold text-[#101828] leading-none tabular-nums">{outcomeTotal.toLocaleString('en-IN')}</span>
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-[#98A2B3] mt-1">Total calls</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-[#667085] mt-1">Total calls</span>
               </div>
             </div>
             <div className="space-y-2.5">
@@ -262,7 +297,7 @@ export const ModernDashboard: React.FC = () => {
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: d.color }} />
                   <span className="text-[#667085] font-medium flex-1">{d.name}</span>
                   <span className="font-bold text-[#101828] tabular-nums">{d.value.toLocaleString('en-IN')}</span>
-                  <span className="text-[#98A2B3] tabular-nums w-10 text-right">
+                  <span className="text-[#667085] tabular-nums w-10 text-right">
                     {outcomeTotal ? `${Math.round((d.value / outcomeTotal) * 100)}%` : '—'}
                   </span>
                 </div>
@@ -283,7 +318,7 @@ export const ModernDashboard: React.FC = () => {
               </button>
             </div>
             <div className="space-y-4">
-              {topAgents.length === 0 && <p className="text-[13px] text-[#98A2B3]">No agents yet. Create your first AI agent to start calling.</p>}
+              {topAgents.length === 0 && <p className="text-[13px] text-[#667085]">No agents yet. Create your first AI agent to start calling.</p>}
               {topAgents.map(({ agent, count }) => (
                 <div key={agent.agent_id} className="flex items-center gap-3">
                   <Avatar name={agent.name} className="w-9 h-9 text-xs" />
@@ -296,7 +331,7 @@ export const ModernDashboard: React.FC = () => {
                       <div className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400 transition-all duration-700" style={{ width: `${Math.round((count / maxAgentCalls) * 100)}%` }} />
                     </div>
                   </div>
-                  <span className="text-[13px] font-bold text-[#101828] tabular-nums">{count}<span className="text-[#98A2B3] font-medium text-[11px]"> calls</span></span>
+                  <span className="text-[13px] font-bold text-[#101828] tabular-nums">{count}<span className="text-[#667085] font-medium text-[11px]"> calls</span></span>
                 </div>
               ))}
             </div>
@@ -312,7 +347,7 @@ export const ModernDashboard: React.FC = () => {
               </button>
             </div>
             <div className="divide-y divide-[#F1F2F4]">
-              {latestLeads.length === 0 && <p className="text-[13px] text-[#98A2B3] py-6">No leads captured yet — they will appear here as calls complete.</p>}
+              {latestLeads.length === 0 && <p className="text-[13px] text-[#667085] py-6">No leads captured yet — they will appear here as calls complete.</p>}
               {latestLeads.map((lead) => {
                 const meta = leadStatusMeta(lead.status);
                 const city = lead.metadata?.customer_info?.city;
@@ -321,7 +356,7 @@ export const ModernDashboard: React.FC = () => {
                     <Avatar name={lead.name || lead.phone_number} />
                     <div className="flex-1 min-w-0">
                       <p className="text-[13.5px] font-semibold text-[#101828] truncate">{lead.name || 'Unknown caller'}</p>
-                      <p className="text-xs text-[#98A2B3] truncate">
+                      <p className="text-xs text-[#667085] truncate">
                         {lead.phone_number}
                         {city ? ` · ${city}` : ''} · {timeAgo(lead.created_at)}
                       </p>
@@ -357,7 +392,7 @@ export const ModernDashboard: React.FC = () => {
             </span>
             <span>
               <span className="block text-sm font-bold text-[#101828]">{a.title}</span>
-              <span className="block text-xs text-[#98A2B3] mt-0.5">{a.text}</span>
+              <span className="block text-xs text-[#667085] mt-0.5">{a.text}</span>
             </span>
             <ArrowRight className="w-4 h-4 text-[#C4CBD4] ml-auto shrink-0" />
           </button>

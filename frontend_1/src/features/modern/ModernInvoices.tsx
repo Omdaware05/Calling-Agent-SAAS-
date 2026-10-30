@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Receipt, CircleDollarSign, Clock, AlertCircle, Download, Check } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Receipt, CircleDollarSign, Clock, AlertCircle, Download, Check, Building2, Plus, ArrowRight } from 'lucide-react';
 import apiClient, { API_BASE_URL } from '../../services/api/client';
 import { useBusiness } from '../../app/providers/BusinessProvider';
-import { MCard, MStatCard, MPageHeader, Pill } from './ui';
+import { MCard, MStatCard, MPageHeader, Pill, primaryPill, whitePill } from './ui';
+import { parseServerDate, formatDate } from '../../utils/dateUtils';
 
 interface Invoice {
   invoice_id: string;
@@ -29,10 +31,18 @@ function money(amount: number, currency?: string): string {
 }
 
 export const ModernInvoices: React.FC = () => {
-  const { selectedBusiness } = useBusiness();
-  const businessId = selectedBusiness?.id || '';
+  const navigate = useNavigate();
+  const { businesses, selectedBusiness, selectBusiness } = useBusiness();
+  const businessId = selectedBusiness?.id || (businesses[0]?.id || '');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Auto-select first business if none selected
+  useEffect(() => {
+    if (!selectedBusiness && businesses.length > 0) {
+      selectBusiness(businesses[0].id);
+    }
+  }, [selectedBusiness, businesses, selectBusiness]);
 
   const load = useCallback(async () => {
     if (!businessId) return;
@@ -61,7 +71,12 @@ export const ModernInvoices: React.FC = () => {
   };
 
   const isPaid = (inv: Invoice) => (inv.status || '').toLowerCase() === 'paid';
-  const isOverdue = (inv: Invoice) => !isPaid(inv) && new Date(inv.due_date).getTime() < Date.now();
+  const isOverdue = (inv: Invoice) => {
+    if (isPaid(inv)) return false;
+    const d = parseServerDate(inv.due_date);
+    return d ? d.getTime() < Date.now() : false;
+  };
+
   const totalBilled = invoices.reduce((a, i) => a + (i.total || 0), 0);
   const totalPaid = invoices.filter(isPaid).reduce((a, i) => a + (i.total || 0), 0);
   const pending = invoices.filter((i) => !isPaid(i) && !isOverdue(i));
@@ -75,13 +90,27 @@ export const ModernInvoices: React.FC = () => {
     { label: 'Overdue', value: money(overdue.reduce((a, i) => a + i.total, 0), currency), icon: AlertCircle, iconClass: 'bg-[#FDECEC] text-[#DC2626]', subtext: `${overdue.length} past due date` },
   ];
 
-  if (!businessId) {
+  if (!businessId && businesses.length === 0) {
     return (
       <div>
-        <MPageHeader title="Invoices & Billing" subtitle="Invoices for the selected business." />
-        <MCard className="p-8 text-center">
-          <p className="text-sm font-semibold text-[#344054]">Select a business first</p>
-          <p className="text-[13px] text-[#98A2B3] mt-1">Invoices are per business — pick one from the business selector at the top.</p>
+        <MPageHeader title="Invoices & Billing" subtitle="Track fees, usage charges and payment status per client." />
+        <MCard className="p-12 text-center max-w-lg mx-auto">
+          <div className="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-100 text-orange-600 flex items-center justify-center mx-auto mb-4">
+            <Receipt className="w-7 h-7" />
+          </div>
+          <h3 className="text-base font-bold text-[#101828]">No client business found</h3>
+          <p className="text-sm text-[#667085] mt-1.5 leading-relaxed">
+            Billing invoices are scoped per business. Create a business first to manage billing records.
+          </p>
+          <div className="mt-6">
+            <button
+              type="button"
+              className={primaryPill}
+              onClick={() => navigate('/businesses')}
+            >
+              <Plus className="w-4 h-4" /> Go to Businesses
+            </button>
+          </div>
         </MCard>
       </div>
     );
@@ -91,7 +120,25 @@ export const ModernInvoices: React.FC = () => {
     <div>
       <MPageHeader
         title="Invoices & Billing"
-        subtitle={`Invoices for ${selectedBusiness?.name || 'the selected business'} — amounts, due dates and payment status.`}
+        subtitle={`Invoices for ${selectedBusiness?.name || 'Selected Client'} — track fees, line items, and payment receipts.`}
+        actions={
+          businesses.length > 1 ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[#667085] font-medium hidden sm:inline">Portfolio:</span>
+              <select
+                value={businessId}
+                onChange={(e) => selectBusiness(e.target.value)}
+                className="h-10 px-3.5 rounded-full bg-white border border-[#E8EAED] text-xs font-semibold text-[#101828] focus:outline-none focus:border-orange-500 shadow-xs cursor-pointer"
+              >
+                {businesses.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : undefined
+        }
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-6">
@@ -101,24 +148,31 @@ export const ModernInvoices: React.FC = () => {
       </div>
 
       <MCard className="overflow-hidden">
-        {loading && <p className="p-8 text-center text-sm text-[#98A2B3]">Loading invoices…</p>}
+        {loading && <p className="p-12 text-center text-sm text-[#667085]">Loading invoices…</p>}
         {!loading && invoices.length === 0 && (
-          <p className="p-8 text-center text-sm text-[#98A2B3]">No invoices for this business yet.</p>
+          <div className="p-12 text-center">
+            <span className="w-12 h-12 rounded-full bg-[#F2F4F7] flex items-center justify-center mx-auto mb-3">
+              <Receipt className="w-5 h-5 text-[#667085]" />
+            </span>
+            <p className="text-sm font-semibold text-[#344054]">No invoices generated for this business yet</p>
+            <p className="text-xs text-[#667085] mt-1">
+              Monthly telecalling usage and platform retainers will automatically populate here.
+            </p>
+          </div>
         )}
         <div className="divide-y divide-[#F1F2F4]">
           {invoices.map((inv) => {
             const paid = isPaid(inv);
             const overdueInv = isOverdue(inv);
             return (
-              <div key={inv.invoice_id} className="flex items-center gap-4 px-6 py-4 hover:bg-[#FAFAFB] transition-colors">
+              <div key={inv.invoice_id} className="flex items-center gap-4 px-6 py-4 hover:bg-[#F8F9FA] transition-colors">
                 <span className="w-10 h-10 rounded-full bg-[#F2F4F7] flex items-center justify-center shrink-0">
-                  <Receipt className="w-[18px] h-[18px] text-[#667085]" strokeWidth={1.9} />
+                  <Receipt className="w-[18px] h-[18px] text-[#475467]" strokeWidth={1.9} />
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-[#101828]">{inv.invoice_number}</p>
-                  <p className="text-xs text-[#98A2B3]">
-                    Issued {new Date(inv.issue_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · Due{' '}
-                    {new Date(inv.due_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  <p className="text-xs text-[#667085] mt-0.5">
+                    Issued {formatDate(inv.issue_date)} · Due {formatDate(inv.due_date)}
                   </p>
                 </div>
                 <span className="text-[15px] font-extrabold text-[#101828] tabular-nums">{money(inv.total, inv.currency)}</span>
@@ -127,7 +181,7 @@ export const ModernInvoices: React.FC = () => {
                   href={`${API_BASE_URL}/invoices/${inv.invoice_id}/pdf?business_id=${businessId}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 h-8 px-3 rounded-full bg-white border border-[#E4E7EC] text-xs font-bold text-[#344054] hover:bg-[#F9FAFB] transition-colors"
+                  className="inline-flex items-center gap-1 h-8 px-3 rounded-full bg-white border border-[#E4E7EC] text-xs font-bold text-[#344054] hover:bg-[#F9FAFB] transition-colors shadow-2xs"
                 >
                   <Download className="w-3.5 h-3.5" /> PDF
                 </a>
@@ -135,7 +189,7 @@ export const ModernInvoices: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => markPaid(inv.invoice_id)}
-                    className="inline-flex items-center gap-1 h-8 px-3 rounded-full bg-[#E7F8EE] text-[#16A34A] text-xs font-bold hover:bg-[#D3F2DF] transition-colors"
+                    className="inline-flex items-center gap-1 h-8 px-3 rounded-full bg-[#E7F8EE] text-[#16A34A] text-xs font-bold hover:bg-[#D3F2DF] transition-colors cursor-pointer"
                   >
                     <Check className="w-3.5 h-3.5" /> Mark paid
                   </button>

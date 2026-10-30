@@ -2,10 +2,11 @@ import React, { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CalendarClock, AlertCircle, CalendarCheck2, CheckCircle2, ListChecks, Check, PhoneCall } from 'lucide-react';
 import { followupsApi } from '../../services/api/followups';
+import { useBusiness } from '../../app/providers/BusinessProvider';
 import { useToast } from '../../app/providers/ToastProvider';
 import { getErrorMessage } from '../../services/api/client';
 import type { FollowupDocument } from '../../types/api';
-import { MCard, MStatCard, MPageHeader, Pill } from './ui';
+import { MCard, MStatCard, MPageHeader, Pill, primaryPill, whitePill } from './ui';
 import { parseServerDate, formatDateTime } from '../../utils/dateUtils';
 
 function dayBucket(iso: string): 'overdue' | 'today' | 'upcoming' {
@@ -22,12 +23,23 @@ function dayBucket(iso: string): 'overdue' | 'today' | 'upcoming' {
 export const ModernFollowups: React.FC = () => {
   const queryClient = useQueryClient();
   const toast = useToast();
+  const { selectedBusiness, isAllBusinesses } = useBusiness();
 
   const { data: followups = [], isLoading } = useQuery<FollowupDocument[]>({
     queryKey: ['followups'],
     queryFn: () => followupsApi.getFollowups({ limit: 200 }),
     refetchInterval: 5000,
   });
+
+  const scopedFollowups = useMemo(() => {
+    if (isAllBusinesses || !selectedBusiness) return followups;
+    const assignedSet = new Set(selectedBusiness.assignedAgentIds || []);
+    return followups.filter((f) => {
+      if (f.tenant_id && f.tenant_id === selectedBusiness.id) return true;
+      if (f.agent_id && assignedSet.has(f.agent_id)) return true;
+      return false;
+    });
+  }, [followups, selectedBusiness, isAllBusinesses]);
 
   const completeMutation = useMutation({
     mutationFn: (id: string) => followupsApi.updateFollowup(id, { status: 'completed' }),
@@ -61,14 +73,14 @@ export const ModernFollowups: React.FC = () => {
   });
 
   const groups = useMemo(() => {
-    const open = followups.filter((f) => f.status === 'pending' || f.status === 'scheduled');
-    const done = followups.filter((f) => f.status === 'completed');
+    const open = scopedFollowups.filter((f) => f.status === 'pending' || f.status === 'scheduled');
+    const done = scopedFollowups.filter((f) => f.status === 'completed');
     const by = (b: string) =>
       open
         .filter((f) => dayBucket(f.scheduled_at) === b)
         .sort((a, b2) => (parseServerDate(a.scheduled_at)?.getTime() || 0) - (parseServerDate(b2.scheduled_at)?.getTime() || 0));
     return { overdue: by('overdue'), today: by('today'), upcoming: by('upcoming'), done: done.length, open: open.length };
-  }, [followups]);
+  }, [scopedFollowups]);
 
   const dueCount = groups.overdue.length + groups.today.length;
 
@@ -83,11 +95,14 @@ export const ModernFollowups: React.FC = () => {
     if (items.length === 0) return null;
     return (
       <div className="mb-6">
-        <h3 className="text-[13px] font-bold uppercase tracking-wider text-[#98A2B3] mb-3">{title}</h3>
+        <h3 className="text-xs font-bold uppercase tracking-wider text-[#475467] mb-2.5 flex items-center gap-1.5">
+          <span className={`w-2 h-2 rounded-full ${tone === 'rose' ? 'bg-rose-500' : tone === 'amber' ? 'bg-amber-500' : 'bg-sky-500'}`} />
+          {title} ({items.length})
+        </h3>
         <MCard className="overflow-hidden">
           <div className="divide-y divide-[#F1F2F4]">
             {items.map((f) => (
-              <div key={f.followup_id} className="flex items-center gap-4 px-6 py-4 hover:bg-[#FAFAFB] transition-colors">
+              <div key={f.followup_id} className="flex items-center gap-4 px-6 py-4 hover:bg-[#F8F9FA] transition-colors">
                 <span
                   className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
                     tone === 'rose' ? 'bg-[#FDECEC] text-[#DC2626]' : tone === 'amber' ? 'bg-[#FFF1E6] text-[#EA580C]' : 'bg-[#E6F4FE] text-[#0284C7]'
@@ -97,10 +112,10 @@ export const ModernFollowups: React.FC = () => {
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-[#101828] tabular-nums">{f.phone_number}</p>
-                  <p className="text-xs text-[#98A2B3] truncate">{f.notes || 'Scheduled callback'}</p>
+                  <p className="text-xs text-[#667085] truncate mt-0.5">{f.notes || 'Scheduled callback'}</p>
                 </div>
-                <span className="hidden sm:block text-[13px] font-semibold text-[#344054]">
-                  {formatDateTime(f.scheduled_at, 'd MMM, hh:mm a')}
+                <span className="hidden sm:block text-[13px] font-semibold text-[#344054] tabular-nums">
+                  {formatDateTime(f.scheduled_at, 'MMM dd · hh:mm a')}
                 </span>
                 <Pill tone={tone}>{title}</Pill>
                 <div className="flex items-center gap-2 shrink-0">
@@ -136,21 +151,21 @@ export const ModernFollowups: React.FC = () => {
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <MPageHeader
-          title="Follow-ups"
-          subtitle="Callbacks your agents promised — grouped by what needs attention first."
-        />
-        <button
-          type="button"
-          onClick={() => dispatchMutation.mutate()}
-          disabled={dispatchMutation.isPending}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 self-start sm:self-auto"
-        >
-          <PhoneCall className="w-4 h-4" />
-          <span>Start Follow-up Calls ({dueCount} Due)</span>
-        </button>
-      </div>
+      <MPageHeader
+        title="Follow-ups"
+        subtitle="Callbacks your agents promised — prioritize overdue inquiries and schedule new touches."
+        actions={
+          <button
+            type="button"
+            onClick={() => dispatchMutation.mutate()}
+            disabled={dispatchMutation.isPending}
+            className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+          >
+            <PhoneCall className="w-4 h-4" />
+            <span>Start Follow-up Calls ({dueCount} Due)</span>
+          </button>
+        }
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-6">
         {stats.map((st, i) => (
@@ -158,12 +173,14 @@ export const ModernFollowups: React.FC = () => {
         ))}
       </div>
 
-      {isLoading && <MCard className="p-8 text-center text-sm text-[#98A2B3]">Loading follow-ups…</MCard>}
+      {isLoading && <MCard className="p-12 text-center text-sm text-[#667085]">Loading follow-ups…</MCard>}
       {!isLoading && groups.open === 0 && (
-        <MCard className="p-8 text-center">
-          <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-          <p className="text-sm font-semibold text-[#344054]">All caught up</p>
-          <p className="text-[13px] text-[#98A2B3] mt-1">No open follow-ups right now.</p>
+        <MCard className="p-12 text-center max-w-md mx-auto">
+          <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3">
+            <CheckCircle2 className="w-6 h-6" />
+          </div>
+          <p className="text-base font-bold text-[#101828]">All caught up!</p>
+          <p className="text-xs text-[#667085] mt-1">There are no pending follow-up callbacks due right now.</p>
         </MCard>
       )}
 

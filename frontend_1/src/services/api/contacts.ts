@@ -14,6 +14,7 @@ export const contactsApi = {
     name?: string;
     email?: string;
     agent_id?: string;
+    tenant_id?: string;
     custom_fields?: Record<string, any>;
   }): Promise<ContactDocument> => {
     const res = await apiClient.post<ContactDocument>('/contacts', payload);

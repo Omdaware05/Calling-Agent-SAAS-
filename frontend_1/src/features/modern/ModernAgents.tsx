@@ -7,6 +7,7 @@ import type { AgentDocument } from '../../types/api';
 import { clsx } from 'clsx';
 import { agentsApi } from '../../services/api/agents';
 import { callsApi } from '../../services/api/calls';
+import { useBusiness } from '../../app/providers/BusinessProvider';
 import type { CallDocument } from '../../types/api';
 import { MCard, MPageHeader, Avatar, Pill, primaryPill } from './ui';
 
@@ -16,11 +17,25 @@ export const ModernAgents: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AgentDocument | null>(null);
 
+  const { selectedBusiness, isAllBusinesses } = useBusiness();
   const { data: agents = [], isLoading } = useQuery({ queryKey: ['agents'], queryFn: () => agentsApi.getAgents(50) });
   const { data: calls = [] } = useQuery<CallDocument[]>({
     queryKey: ['modern-calls'],
     queryFn: () => callsApi.getCalls({ limit: 200 }),
   });
+
+  const displayAgents = useMemo(() => {
+    if (isAllBusinesses || !selectedBusiness) return agents;
+    const assigned = selectedBusiness.assignedAgentIds || [];
+    return agents.filter((a) => {
+      const aid = a.agent_id || (a as any).id;
+      return (
+        assigned.includes(aid) ||
+        (a as any).tenant_id === selectedBusiness.id ||
+        (a as any).business_id === selectedBusiness.id
+      );
+    });
+  }, [agents, selectedBusiness, isAllBusinesses]);
 
   const toggleMutation = useMutation({
     mutationFn: (id: string) => agentsApi.toggleAgent(id),
@@ -52,11 +67,11 @@ export const ModernAgents: React.FC = () => {
         }
       />
 
-      {isLoading && <MCard className="p-8 text-center text-sm text-[#98A2B3]">Loading agents…</MCard>}
-      {!isLoading && agents.length === 0 && (
+      {isLoading && <MCard className="p-8 text-center text-sm text-[#667085]">Loading agents…</MCard>}
+      {!isLoading && displayAgents.length === 0 && (
         <MCard className="p-8 text-center">
           <p className="text-sm font-semibold text-[#344054]">No agents yet</p>
-          <p className="text-[13px] text-[#98A2B3] mt-1">Create your first AI agent to start making calls.</p>
+          <p className="text-[13px] text-[#667085] mt-1">Create your first AI agent to start making calls.</p>
         </MCard>
       )}
 
@@ -68,7 +83,7 @@ export const ModernAgents: React.FC = () => {
                 <Avatar name={agent.name} className="w-12 h-12 text-base" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[15px] font-bold text-[#101828] truncate">{agent.name}</p>
-                  <p className="text-xs text-[#98A2B3] truncate">{agent.company_name || 'ARB SoftTech'}</p>
+                  <p className="text-xs text-[#667085] truncate">{agent.company_name || 'ARB SoftTech'}</p>
                 </div>
                 <button
                   type="button"
@@ -109,7 +124,7 @@ export const ModernAgents: React.FC = () => {
               <div className="flex items-center justify-between mt-5 pt-4 border-t border-[#F1F2F4]">
                 <div>
                   <span className="text-lg font-bold text-[#101828] tabular-nums">{callsByAgent.get(agent.agent_id) || 0}</span>
-                  <span className="text-xs text-[#98A2B3] font-medium"> calls made</span>
+                  <span className="text-xs text-[#667085] font-medium"> calls made</span>
                 </div>
                 <Pill tone={agent.is_enabled ? 'emerald' : 'slate'}>{agent.is_enabled ? 'Active' : 'Paused'}</Pill>
                 <div className="flex items-center gap-1.5">

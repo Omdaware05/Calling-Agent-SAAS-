@@ -1,3 +1,4 @@
+from app.models.lead import Lead
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -68,6 +69,8 @@ def map_call_to_document(c: Call) -> Dict[str, Any]:
             interest = "uncertain"
         else:
             interest = disp_lower
+    elif (c.duration or 0) >= 60:
+        interest = "interested"
 
     recording_url = f"/api/v1/calls/{c.id}/recording"
 
@@ -85,6 +88,7 @@ def map_call_to_document(c: Call) -> Dict[str, Any]:
         "provider": "vobiz",
         "created_at": to_iso_utc(c.created_at) or to_iso_utc(datetime.now(UTC)),
         "updated_at": to_iso_utc(c.ended_at or c.created_at or datetime.now(UTC)),
+        "disposition": c.disposition or interest,
         "last_interest_status": interest,
         "transcript": {
             "call_id": c.id,
@@ -241,6 +245,14 @@ async def get_call_detail(
     call = await call_service.get_call_status(db, call_id)
     if not call:
         raise HTTPException(status_code=404, detail=f"Call {call_id} not found")
+
+    # If disposition is missing or uncertain, check if a qualified Lead already exists for this call
+    if not call.disposition or call.disposition.lower() == "uncertain":
+        lead_stmt = select(Lead).where(Lead.call_id == call.id)
+        lead_res = await db.execute(lead_stmt)
+        matched_lead = lead_res.scalars().first()
+        if matched_lead and matched_lead.status:
+            call.disposition = matched_lead.status
 
     # If call is completed/failed and lacks real transcript or recording in MinIO, sync from Dograh
     needs_sync = (

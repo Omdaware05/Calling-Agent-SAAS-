@@ -137,12 +137,12 @@ export const ModernCalendar: React.FC = () => {
             <h3 className="text-[17px] font-extrabold tracking-tight text-[#101828] dark:text-white">{monthLabel}</h3>
           </div>
           {summaryLoading && (
-            <span className="text-xs text-[#98A2B3] dark:text-neutral-400">Loading monthly activity…</span>
+            <span className="text-xs text-[#667085] dark:text-neutral-400">Loading monthly activity…</span>
           )}
         </div>
         <div className="grid grid-cols-7 border-t border-[#F1F2F4] dark:border-white/[0.08]">
           {WEEKDAYS.map((w) => (
-            <div key={w} className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-[#98A2B3] dark:text-neutral-400 border-b border-[#F1F2F4] dark:border-white/[0.08]">
+            <div key={w} className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-[#667085] dark:text-neutral-400 border-b border-[#F1F2F4] dark:border-white/[0.08]">
               {w}
             </div>
           ))}
@@ -210,7 +210,7 @@ export const ModernCalendar: React.FC = () => {
       </MCard>
 
       <h3 className="text-[16px] font-extrabold tracking-tight text-[#101828] dark:text-white mb-3">{selectedLabel}</h3>
-      {dayLoading && <MCard className="p-8 text-center text-sm text-[#98A2B3] dark:text-neutral-400">Loading date activity…</MCard>}
+      {dayLoading && <MCard className="p-8 text-center text-sm text-[#667085] dark:text-neutral-400">Loading date activity…</MCard>}
       {!dayLoading && (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <MCard className="p-5">
@@ -230,7 +230,7 @@ export const ModernCalendar: React.FC = () => {
               )}
             </div>
             <div className="space-y-3">
-              {calls.length === 0 && <p className="text-[13px] text-[#98A2B3] dark:text-neutral-400">No calls on this date.</p>}
+              {calls.length === 0 && <p className="text-[13px] text-[#667085] dark:text-neutral-400">No calls on this date.</p>}
               {calls.slice(0, 10).map((c) => {
                 const meta = callStateMeta(c.state);
                 return (
@@ -241,7 +241,7 @@ export const ModernCalendar: React.FC = () => {
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-bold text-[#101828] dark:text-white tabular-nums truncate">{c.phone_number}</p>
-                      <p className="text-[11px] text-[#98A2B3] dark:text-neutral-400 truncate">
+                      <p className="text-[11px] text-[#667085] dark:text-neutral-400 truncate">
                         {timeOf(c.created_at)} · {(c.agent_id && agentName.get(c.agent_id)) || 'AI Agent'} · {fmtDuration(c.duration)}
                       </p>
                     </div>
@@ -250,7 +250,7 @@ export const ModernCalendar: React.FC = () => {
                 );
               })}
               {calls.length > 10 && (
-                <p className="text-[11px] text-[#98A2B3] dark:text-neutral-400 pt-1 text-center">+ {calls.length - 10} more calls in history</p>
+                <p className="text-[11px] text-[#667085] dark:text-neutral-400 pt-1 text-center">+ {calls.length - 10} more calls in history</p>
               )}
             </div>
           </MCard>
@@ -272,7 +272,7 @@ export const ModernCalendar: React.FC = () => {
               )}
             </div>
             <div className="space-y-3">
-              {leads.length === 0 && <p className="text-[13px] text-[#98A2B3] dark:text-neutral-400">No leads captured on this date.</p>}
+              {leads.length === 0 && <p className="text-[13px] text-[#667085] dark:text-neutral-400">No leads captured on this date.</p>}
               {leads.slice(0, 10).map((l) => {
                 const meta = leadStatusMeta(l.status || 'new');
                 return (
@@ -283,7 +283,7 @@ export const ModernCalendar: React.FC = () => {
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-bold text-[#101828] dark:text-white truncate">{l.name || 'Interested caller'}</p>
-                      <p className="text-[11px] text-[#98A2B3] dark:text-neutral-400 tabular-nums truncate">
+                      <p className="text-[11px] text-[#667085] dark:text-neutral-400 tabular-nums truncate">
                         {l.phone_number} · score {Math.round(scorePct(l.score))}
                       </p>
                     </div>
@@ -292,7 +292,7 @@ export const ModernCalendar: React.FC = () => {
                 );
               })}
               {leads.length > 10 && (
-                <p className="text-[11px] text-[#98A2B3] dark:text-neutral-400 pt-1 text-center">+ {leads.length - 10} more leads captured</p>
+                <p className="text-[11px] text-[#667085] dark:text-neutral-400 pt-1 text-center">+ {leads.length - 10} more leads captured</p>
               )}
             </div>
           </MCard>
@@ -314,7 +314,7 @@ export const ModernCalendar: React.FC = () => {
               )}
             </div>
             <div className="space-y-3">
-              {followups.length === 0 && <p className="text-[13px] text-[#98A2B3] dark:text-neutral-400">No follow-ups due on this date.</p>}
+              {followups.length === 0 && <p className="text-[13px] text-[#667085] dark:text-neutral-400">No follow-ups due on this date.</p>}
               {followups.slice(0, 10).map((f) => (
                 <div
                   key={f.followup_id}
@@ -323,7 +323,7 @@ export const ModernCalendar: React.FC = () => {
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-bold text-[#101828] dark:text-white tabular-nums truncate">{f.phone_number}</p>
-                    <p className="text-[11px] text-[#98A2B3] dark:text-neutral-400 truncate">
+                    <p className="text-[11px] text-[#667085] dark:text-neutral-400 truncate">
                       {timeOf(f.scheduled_at)} · {f.notes || 'Scheduled callback'}
                     </p>
                   </div>
@@ -333,7 +333,7 @@ export const ModernCalendar: React.FC = () => {
                 </div>
               ))}
               {followups.length > 10 && (
-                <p className="text-[11px] text-[#98A2B3] dark:text-neutral-400 pt-1 text-center">+ {followups.length - 10} more follow-ups scheduled</p>
+                <p className="text-[11px] text-[#667085] dark:text-neutral-400 pt-1 text-center">+ {followups.length - 10} more follow-ups scheduled</p>
               )}
             </div>
           </MCard>

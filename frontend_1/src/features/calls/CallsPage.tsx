@@ -65,10 +65,9 @@ export const CallsPage: React.FC = () => {
       ]);
       result = result.filter(
         (c) =>
-          !c.agent_id ||
-          agentIds.has(c.agent_id) ||
-          (c as any).tenant_id === selectedBusiness.id ||
-          (c as any).business_id === selectedBusiness.id
+          ((c as any).tenant_id && (c as any).tenant_id === selectedBusiness.id) ||
+          ((c as any).business_id && (c as any).business_id === selectedBusiness.id) ||
+          (c.agent_id && agentIds.has(c.agent_id))
       );
     }
     return filterByDateRange(result, (c) => c.created_at, timeRange);

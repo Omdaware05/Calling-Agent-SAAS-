@@ -31,14 +31,14 @@ export const ModernActiveCalls: React.FC = () => {
       />
 
       <MCard className="overflow-hidden">
-        {isLoading && <p className="p-8 text-center text-sm text-[#98A2B3]">Loading live calls…</p>}
+        {isLoading && <p className="p-8 text-center text-sm text-[#667085]">Loading live calls…</p>}
         {!isLoading && calls.length === 0 && (
           <div className="p-10 text-center">
             <span className="w-12 h-12 rounded-full bg-[#F2F4F7] flex items-center justify-center mx-auto mb-3">
-              <PhoneCall className="w-5 h-5 text-[#98A2B3]" />
+              <PhoneCall className="w-5 h-5 text-[#667085]" />
             </span>
             <p className="text-sm font-semibold text-[#344054]">No calls currently active</p>
-            <p className="text-[13px] text-[#98A2B3] mt-1">All channels are idle. Start a campaign or a quick call to see live activity here.</p>
+            <p className="text-[13px] text-[#667085] mt-1">All channels are idle. Start a campaign or a quick call to see live activity here.</p>
           </div>
         )}
         <div className="divide-y divide-[#F1F2F4]">
@@ -52,7 +52,7 @@ export const ModernActiveCalls: React.FC = () => {
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-[#101828] tabular-nums">{c.phone_number}</p>
-                  <p className="text-xs text-[#98A2B3]">{(c.agent_id && agentName.get(c.agent_id)) || 'AI Agent'} · {c.provider}</p>
+                  <p className="text-xs text-[#667085]">{(c.agent_id && agentName.get(c.agent_id)) || 'AI Agent'} · {c.provider}</p>
                 </div>
                 <span className="text-[13px] font-semibold text-[#344054] tabular-nums">{fmtDuration(c.duration)}</span>
                 <Pill tone={meta.tone}>{meta.label}</Pill>

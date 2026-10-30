@@ -6,6 +6,7 @@ import { CallStateBadge, ProviderBadge, InterestBadge } from '../../components/u
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { callsApi } from '../../services/api/calls';
+import { leadsApi } from '../../services/api/leads';
 import { useToast } from '../../app/providers/ToastProvider';
 import { getErrorMessage } from '../../services/api/client';
 import {
@@ -54,7 +55,24 @@ export const CallDetailDrawer: React.FC<CallDetailDrawerProps> = ({ callId, onCl
     enabled: !!callId,
   });
 
+  const { data: leads = [] } = useQuery({
+    queryKey: ['leads'],
+    queryFn: () => leadsApi.getLeads(),
+    staleTime: 15000,
+  });
+
   const effectiveInterestStatus = React.useMemo(() => {
+    // 1. Check if a qualified lead exists in the database for this call or prospect phone
+    const matchedLead = leads.find(
+      (l) => (callId && l.call_id === callId) || (call?.phone_number && l.phone_number === call.phone_number)
+    );
+    if (matchedLead?.status) {
+      const ls = matchedLead.status.toLowerCase();
+      if (['interested', 'callback_requested', 'qualified', 'hot'].includes(ls)) return 'interested';
+      if (['not_interested', 'rejected', 'opt_out', 'disqualified'].includes(ls)) return 'not_interested';
+      return ls;
+    }
+
     const fromInterest = interest?.status?.toLowerCase();
     if (fromInterest && fromInterest !== 'uncertain') {
       if (['interested', 'callback_requested', 'qualified', 'hot'].includes(fromInterest)) return 'interested';
@@ -76,8 +94,13 @@ export const CallDetailDrawer: React.FC<CallDetailDrawerProps> = ({ callId, onCl
       return fromLast;
     }
 
+    // Engagement policy: calls >= 60s qualify as interested
+    if ((call?.duration || 0) >= 60) {
+      return 'interested';
+    }
+
     return fromInterest || fromLast || 'uncertain';
-  }, [interest, call]);
+  }, [interest, call, leads, callId]);
 
   const handleCopyId = (id: string) => {
     navigator.clipboard.writeText(id);

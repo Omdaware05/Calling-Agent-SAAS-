@@ -83,11 +83,11 @@ export const ModernCampaigns: React.FC = () => {
         ))}
       </div>
 
-      {isLoading && <MCard className="p-8 text-center text-sm text-[#98A2B3]">Loading campaigns…</MCard>}
+      {isLoading && <MCard className="p-8 text-center text-sm text-[#667085]">Loading campaigns…</MCard>}
       {!isLoading && campaigns.length === 0 && (
         <MCard className="p-8 text-center">
           <p className="text-sm font-semibold text-[#344054]">No campaigns yet</p>
-          <p className="text-[13px] text-[#98A2B3] mt-1">Create a campaign to start outbound calling.</p>
+          <p className="text-[13px] text-[#667085] mt-1">Create a campaign to start outbound calling.</p>
         </MCard>
       )}
 
@@ -106,7 +106,7 @@ export const ModernCampaigns: React.FC = () => {
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-[15px] font-bold text-[#101828] truncate">{c.name}</p>
-                    <p className="text-xs text-[#98A2B3] truncate">{agentName(c.agent_id)}</p>
+                    <p className="text-xs text-[#667085] truncate">{agentName(c.agent_id)}</p>
                   </div>
                   <Pill tone={meta.tone}>
                     {isRunning && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
@@ -130,7 +130,7 @@ export const ModernCampaigns: React.FC = () => {
                 </div>
 
                 <div className="flex items-center justify-between mt-5 pt-4 border-t border-[#F1F2F4]">
-                  <span className="text-xs text-[#98A2B3]">
+                  <span className="text-xs text-[#667085]">
                     {c.phone_numbers?.length || 0} contacts · {new Date(c.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                   </span>
                   {isRunning ? (

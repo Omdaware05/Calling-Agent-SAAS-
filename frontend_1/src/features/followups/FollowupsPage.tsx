@@ -35,13 +35,23 @@ export const FollowupsPage: React.FC = () => {
     refetchInterval: 3000,
   });
 
+  const scopedFollowups = React.useMemo(() => {
+    if (isAllBusinesses || !selectedBusiness) return followups;
+    const assignedSet = new Set(selectedBusiness.assignedAgentIds || []);
+    return followups.filter((f) => {
+      if (f.tenant_id && f.tenant_id === selectedBusiness.id) return true;
+      if (f.agent_id && assignedSet.has(f.agent_id)) return true;
+      return false;
+    });
+  }, [followups, selectedBusiness, isAllBusinesses]);
+
   const displayFollowups = React.useMemo(() => {
-    return filterByDateRange(followups, (f) => f.scheduled_at || f.created_at, timeRange);
-  }, [followups, timeRange]);
+    return filterByDateRange(scopedFollowups, (f) => f.scheduled_at || f.created_at, timeRange);
+  }, [scopedFollowups, timeRange]);
 
   const dueCount = React.useMemo(() => {
-    return followups.filter((f) => isFollowupDue(f.scheduled_at, f.status)).length;
-  }, [followups]);
+    return scopedFollowups.filter((f) => isFollowupDue(f.scheduled_at, f.status)).length;
+  }, [scopedFollowups]);
 
   const handleExportExcel = () => {
     const exportRows = displayFollowups.map((f) => ({

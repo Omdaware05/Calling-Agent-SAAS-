@@ -61,24 +61,24 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ initialTab }) => {
       />
 
       {/* Settings Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-zinc-800 pb-2 overflow-x-auto">
+      <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-white/[0.08] shadow-[0_1px_3px_rgba(16,24,40,0.04)] overflow-x-auto">
         <button
           type="button"
           onClick={() => handleTabChange('sarvam')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
+          className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all flex items-center gap-2 shrink-0 ${
             activeTab === 'sarvam'
-              ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-sm shadow-orange-500/20'
+              ? 'bg-[#101828] text-white shadow-sm'
               : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800'
           }`}
         >
-          <span>Sarvam AI</span>
+          <span>Sarvam AI Voice</span>
         </button>
         <button
           type="button"
           onClick={() => handleTabChange('telephony')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
+          className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all flex items-center gap-2 shrink-0 ${
             activeTab === 'telephony'
-              ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/20'
+              ? 'bg-[#101828] text-white shadow-sm'
               : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800'
           }`}
         >
@@ -88,9 +88,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ initialTab }) => {
         <button
           type="button"
           onClick={() => handleTabChange('twilio')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
+          className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all flex items-center gap-2 shrink-0 ${
             activeTab === 'twilio'
-              ? 'bg-red-600 text-white shadow-sm shadow-red-600/20'
+              ? 'bg-[#101828] text-white shadow-sm'
               : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800'
           }`}
         >
@@ -100,29 +100,29 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ initialTab }) => {
         <button
           type="button"
           onClick={() => handleTabChange('transcript')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
+          className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all flex items-center gap-2 shrink-0 ${
             activeTab === 'transcript'
-              ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-sm shadow-orange-500/20'
+              ? 'bg-[#101828] text-white shadow-sm'
               : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800'
           }`}
         >
           <FileText className="w-3.5 h-3.5" />
-          <span>Transcript API</span>
+          <span>Gemini Transcript API</span>
         </button>
         <button
           type="button"
           onClick={() => handleTabChange('workspace')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+          className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all flex items-center gap-2 shrink-0 ${
             activeTab === 'workspace'
-              ? 'bg-slate-900 dark:bg-white text-white dark:text-zinc-950 shadow-sm'
+              ? 'bg-[#101828] text-white shadow-sm'
               : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800'
           }`}
         >
-          Workspace Preferences
+          <span>Workspace Preferences</span>
         </button>
 
         {/* Cloud / Local Model Engine Switcher */}
-        <div className="inline-flex items-center shrink-0">
+        <div className="ml-auto inline-flex items-center shrink-0 pr-1">
           <ModelModeSwitcher />
         </div>
       </div>
