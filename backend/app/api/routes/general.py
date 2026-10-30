@@ -11,13 +11,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import save_model_mode, save_twilio_credentials, save_vobiz_credentials, settings
 from app.database import AsyncSessionLocal, get_db
+from app.dependencies import verify_app_client
 from app.models.telephony import TelephonyConfig
 from app.schemas.telephony import TelephonyConfigRequest
 from app.services.telephony_service import telephony_service
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["general"])
+# Every endpoint here is admin configuration (carrier credentials, model
+# mode) — it previously had NO auth while all other routers required the
+# app key, so anyone could overwrite telephony credentials / rewrite .env.
+router = APIRouter(tags=["general"], dependencies=[Depends(verify_app_client)])
 
 
 class ModelLabTelephonySaveRequest(BaseModel):
@@ -230,13 +234,22 @@ async def test_model_lab_telephony(db: AsyncSession = Depends(get_db)):
                     "http_code": 404,
                 }
     except Exception as e:
-        logger.debug(f"VoBiz upstream check network notice: {e}")
+        # Used to fall through to a fake CONNECTED verdict below: any
+        # network error or unhandled upstream status was reported to the
+        # UI as "credentials are active and verified".
+        logger.warning(f"VoBiz upstream check failed: {e}")
+        return {
+            "status": "UNREACHABLE",
+            "connected": False,
+            "message": f"Could not reach the VoBiz API to verify the account ({type(e).__name__}). Credentials are saved but NOT verified.",
+            "http_code": 0,
+        }
 
     return {
-        "status": "CONNECTED",
-        "connected": True,
-        "message": f"VoBiz Account '{auth_id}' credentials are active and verified for SIP routing.",
-        "http_code": 200,
+        "status": "UNVERIFIED",
+        "connected": False,
+        "message": f"VoBiz API returned an unexpected status (HTTP {resp.status_code}); credentials are saved but NOT verified.",
+        "http_code": resp.status_code,
     }
 
 
@@ -658,7 +671,7 @@ LOCAL_BYOK_CONFIG = {
 }
 
 def get_sarvam_byok_config():
-    sarvam_key = getattr(settings, "SARVAM_API_KEY", "") or "sk_nipv0trp_igNxLgrUcrqEGnKbEk1pSViR"
+    sarvam_key = getattr(settings, "SARVAM_API_KEY", "")
     voice = getattr(settings, "SARVAM_DEFAULT_VOICE", "shubh")
     return {
         "version": 2,
@@ -694,7 +707,7 @@ CLOUD_API_CONFIG = {
     "version": 2,
     "mode": "dograh",
     "dograh": {
-        "api_key": "oss_sk_yV7obDwIeYaTeOrcllPfnJAplrcduHwe",
+        "api_key": getattr(settings, "DOGRAH_MPS_KEY", ""),
         "voice": "dg_voice_4c52528b7a1804810035",
         "speed": 1.0,
         "language": "multi"
@@ -711,6 +724,7 @@ async def get_model_mode():
     persisted_mode = getattr(settings, "ACTIVE_MODEL_MODE", "sarvam") or "sarvam"
     mode = persisted_mode
     dograh_available = False
+    dograh_mode = None
 
     try:
         fast_dograh = httpx.Timeout(1.0, connect=0.5)
@@ -723,32 +737,18 @@ async def get_model_mode():
                 dograh_available = True
                 data = resp.json()
                 cfg = data.get("configuration") or {}
-                # Determine mode from Dograh if possible
+                # Determine the mode Dograh is actually running
                 if cfg.get("mode") == "byok":
                     byok_pl = cfg.get("byok", {}).get("pipeline", {})
-                    if byok_pl.get("tts", {}).get("provider") == "sarvam":
-                        d_mode = "sarvam"
-                    else:
-                        d_mode = "local"
+                    dograh_mode = "sarvam" if byok_pl.get("tts", {}).get("provider") == "sarvam" else "local"
                 else:
-                    d_mode = "api"
-
-                if d_mode != persisted_mode:
-                    try:
-                        if persisted_mode == "sarvam":
-                            cfg_payload = get_sarvam_byok_config()
-                        elif persisted_mode == "local":
-                            cfg_payload = LOCAL_BYOK_CONFIG
-                        else:
-                            cfg_payload = CLOUD_API_CONFIG
-                        await client.put(
-                            f"{settings.DOGRAH_BASE_URL}/api/v1/organizations/model-configurations/v2",
-                            headers={"X-API-Key": settings.DOGRAH_API_KEY},
-                            json=cfg_payload
-                        )
-                    except Exception:
-                        pass
-                mode = persisted_mode
+                    dograh_mode = "api"
+                # NOTE: this GET used to silently PUT the persisted config
+                # back into Dograh whenever the two disagreed — a read with
+                # an external side effect that raced the toggle endpoint.
+                # It is read-only now; drift is reported via
+                # 'dograh_mode_mismatch' and reconciled only by the
+                # explicit POST /model-mode/toggle action.
     except Exception as e:
         logger.debug(f"Dograh model config endpoint unreachable ({e}); using persisted mode '{mode}'.")
 
@@ -770,6 +770,8 @@ async def get_model_mode():
         "is_sarvam": mode == "sarvam",
         "local_server_ready": local_server_healthy,
         "dograh_available": dograh_available,
+        "dograh_mode": dograh_mode,
+        "dograh_mode_mismatch": bool(dograh_available and dograh_mode and dograh_mode != mode),
         "models": {
             "llm": (
                 "Sarvam 105B (Sarvam AI Cloud)" if mode == "sarvam"
@@ -842,8 +844,6 @@ async def toggle_model_mode(request: Optional[dict] = None):
                 logger.info(f"Updated Dograh model configuration to {target_mode} via REST API")
             else:
                 logger.warning(f"Dograh REST API returned status {resp.status_code}: {resp.text}")
-    except Exception as e:
-        logger.debug(f"Dograh REST API not reachable ({e})")
     except Exception as e:
         logger.debug(f"Dograh REST API not reachable ({e})")
 

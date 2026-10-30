@@ -113,9 +113,21 @@ class DograhService:
                     resp = await client.post(url, json=payload, headers=self._get_headers())
                     if resp.status_code in (200, 201):
                         data = resp.json()
-                        # Extract run name from message e.g. "Call initiated successfully with run name WR-TEL-OUT-..."
+                        # Extract the REAL run id wherever the API puts it.
+                        # This used to return only a run NAME parsed from the
+                        # message text, so callers stored dograh_run_id=None
+                        # and status polling never ran for these calls — a
+                        # missed webhook left them stuck in "initiating".
+                        nested = data.get("data") if isinstance(data.get("data"), dict) else {}
+                        run_id = (
+                            data.get("workflow_run_id") or data.get("run_id")
+                            or data.get("id") or data.get("call_id")
+                            or nested.get("workflow_run_id") or nested.get("run_id")
+                            or nested.get("id")
+                        )
                         return {
                             "status": "success",
+                            "workflow_run_id": str(run_id) if run_id else None,
                             "workflow_run_name": data.get("message", "").split("run name ")[-1] if "run name " in data.get("message", "") else "WR-TEL-OUT",
                             "raw": data,
                         }
@@ -496,7 +508,7 @@ class DograhService:
         is_sarvam = active_mode == "sarvam" or (tts_provider or "").lower() == "sarvam"
 
         if is_sarvam:
-            sarvam_key = getattr(settings, "SARVAM_API_KEY", "") or "sk_nipv0trp_igNxLgrUcrqEGnKbEk1pSViR"
+            sarvam_key = getattr(settings, "SARVAM_API_KEY", "")
             valid_sarvam_voices = {
                 "shubh", "ritu", "aditya", "priya", "rahul", "pooja", "rohan",
                 "simran", "kavya", "amit", "dev", "ishita", "ashutosh", "neha"

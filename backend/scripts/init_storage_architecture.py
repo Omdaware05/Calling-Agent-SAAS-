@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def backfill_and_verify():
+async def backfill_and_verify(dry_run: bool = False, limit: int = 0):
     print("=" * 60)
     print("STARTING CALL DATA-STORAGE ARCHITECTURE VERIFICATION & BACKFILL")
     print("=" * 60)
@@ -48,10 +48,19 @@ async def backfill_and_verify():
         )
         res = await session.execute(stmt)
         calls = list(res.scalars().all())
-        print(f"  Found {len(calls)} calls in PostgreSQL")
+        if limit:
+            calls = calls[:limit]
+        print(f"  Found {len(calls)} calls in PostgreSQL{' (DRY RUN: read-only)' if dry_run else ''}")
 
         for c in calls:
             print(f"  Processing call {c.id} (Status: {c.status}, Phone: {c.phone_number})...")
+            if dry_run:
+                # Presented as a *verification* script, this used to WRITE
+                # recordings/transcripts for the entire history. Dry-run
+                # only reports what exists.
+                key = f"calls/{c.id}/recording.wav"
+                print(f"    - Recording exists in storage: {await storage_service.exists(key)}")
+                continue
             await persist_post_call_artifacts(session, c)
             await session.commit()
             await session.refresh(c, ["recording", "transcript"])
@@ -78,8 +87,9 @@ async def backfill_and_verify():
             if c.recording and c.recording.storage_key:
                 has_audio = await storage_service.exists(c.recording.storage_key)
                 if has_audio:
-                    audio_bytes = await storage_service.download(c.recording.storage_key)
-                    audio_size = len(audio_bytes) if audio_bytes else 0
+                    # Report the recorded size — this used to download
+                    # every recording fully into memory just to verify it.
+                    audio_size = c.recording.file_size or 0
 
             # Check Transcript segments
             num_segments = len(c.transcript.segments) if (c.transcript and c.transcript.segments) else 0
@@ -99,4 +109,8 @@ async def backfill_and_verify():
 
 
 if __name__ == "__main__":
-    asyncio.run(backfill_and_verify())
+    import sys as _sys
+    _limit = 0
+    if "--limit" in _sys.argv:
+        _limit = int(_sys.argv[_sys.argv.index("--limit") + 1])
+    asyncio.run(backfill_and_verify(dry_run="--dry-run" in _sys.argv, limit=_limit))

@@ -1,16 +1,19 @@
 import logging
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 import httpx
 
 from app.schemas.voice import VoiceListResponse, VoiceProvider
 from app.services.voice_service import voice_service
 from app.config import settings
+from app.dependencies import verify_app_client
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/voice", tags=["Voice Settings"])
+# Voice settings endpoints read/write provider API keys — they previously
+# had NO auth and returned FULL keys. Now behind the app key like the rest.
+router = APIRouter(prefix="/voice", tags=["Voice Settings"], dependencies=[Depends(verify_app_client)])
 
 LOCAL_AI_URL = "http://127.0.0.1:8002"
 
@@ -115,7 +118,7 @@ async def preview_sarvam_voice(voice_id: str):
     }
     speaker = voice_id.lower() if voice_id.lower() in valid_sarvam_voices else getattr(settings, "SARVAM_DEFAULT_VOICE", "shubh")
     sample_text = "नमस्ते! मैं वोक्सोरा एआई कॉलिंग असिस्टेंट हूँ। मैं आज आपकी क्या सहायता कर सकता हूँ?"
-    sarvam_key = getattr(settings, "SARVAM_API_KEY", "") or "sk_nipv0trp_igNxLgrUcrqEGnKbEk1pSViR"
+    sarvam_key = getattr(settings, "SARVAM_API_KEY", "")
 
     tts_payload = {
         "inputs": [sample_text],
@@ -156,10 +159,12 @@ async def get_sarvam_config():
     Returns the current Sarvam AI configuration status.
     """
     key = getattr(settings, "SARVAM_API_KEY", "") or ""
-    masked = f"{key[:7]}...{key[-4:]}" if len(key) > 12 else key
+    masked = f"{key[:7]}...{key[-4:]}" if len(key) > 12 else ("Configured" if key else "")
     return {
         "success": True,
-        "api_key": key,
+        # Never return the raw key — clients use masked_api_key +
+        # is_configured for status and POST a new key only to replace it.
+        "api_key": "",
         "masked_api_key": masked,
         "default_voice": getattr(settings, "SARVAM_DEFAULT_VOICE", "shubh"),
         "tts_model": getattr(settings, "SARVAM_TTS_MODEL", "bulbul:v3"),
@@ -177,7 +182,11 @@ async def update_sarvam_config(req: dict):
     """
     from app.config import save_sarvam_credentials, save_model_mode
 
-    api_key = req.get("api_key", "").strip()
+    api_key = (req.get("api_key") or "").strip()
+    if not api_key:
+        # Empty key = "keep the existing one" (GET no longer returns the
+        # raw key, so settings pages save other fields with a blank key).
+        api_key = getattr(settings, "SARVAM_API_KEY", "") or ""
     if not api_key:
         raise HTTPException(status_code=400, detail="Sarvam API key cannot be empty")
 
@@ -190,7 +199,6 @@ async def update_sarvam_config(req: dict):
     return {
         "success": True,
         "message": "Sarvam AI configuration saved and persisted successfully.",
-        "api_key": api_key,
         "default_voice": default_voice,
     }
 
@@ -262,13 +270,14 @@ async def get_transcript_api_config():
     """
     import os
     key = getattr(settings, "GEMINI_API_KEY", "") or os.environ.get("GEMINI_API_KEY", "") or ""
-    masked = f"{key[:6]}...{key[-4:]}" if len(key) > 10 else (key or "Not configured")
+    masked = f"{key[:6]}...{key[-4:]}" if len(key) > 10 else ("Configured" if key else "Not configured")
     model = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
     return {
         "success": True,
         "provider": "google_gemini",
         "provider_name": "Google Gemini AI",
-        "api_key": key,
+        # Never return the raw key (see /sarvam/config note).
+        "api_key": "",
         "masked_api_key": masked,
         "model": model,
         "is_configured": bool(key and len(key) > 8),
@@ -293,6 +302,10 @@ async def update_transcript_api_config(req: dict):
 
     api_key = (req.get("api_key") or "").strip()
     if not api_key:
+        # Empty key = keep the existing one (see /sarvam/config).
+        import os as _os
+        api_key = getattr(settings, "GEMINI_API_KEY", "") or _os.environ.get("GEMINI_API_KEY", "") or ""
+    if not api_key:
         raise HTTPException(status_code=400, detail="Gemini / Transcript API key cannot be empty")
 
     model = (req.get("model") or "gemini-2.5-flash").strip()
@@ -301,7 +314,6 @@ async def update_transcript_api_config(req: dict):
     return {
         "success": True,
         "message": "Transcript API credentials updated and persisted successfully. Active in real-time without restart.",
-        "api_key": api_key,
         "model": model,
     }
 

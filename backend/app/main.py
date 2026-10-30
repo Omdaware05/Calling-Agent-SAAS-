@@ -142,13 +142,15 @@ async def health_check():
     """
     Service health check endpoint reporting DB, Redis, Storage, Dograh, Voice AI Engine, and Telephony status.
     """
-    # 1. Database check
+    # 1. Database check (this endpoint is unauthenticated: report status
+    # only — no exception text, phone numbers, or storage bucket names)
     db_status = "healthy"
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
     except Exception as e:
-        db_status = f"degraded ({e})"
+        logger.warning(f"Health check: database degraded: {e}")
+        db_status = "degraded"
 
     # 2. Redis check (non-blocking fast check)
     redis_status = "offline"
@@ -216,7 +218,6 @@ async def health_check():
         },
         "storage": {
             "provider": "minio/s3",
-            "bucket": settings.S3_BUCKET,
             "status": storage_status,
         },
         "dograh": {
@@ -226,15 +227,12 @@ async def health_check():
         "telephony": {
             "provider": "vobiz",
             "configured": vobiz_configured,
-            "from_number": settings.VOBIZ_FROM_NUMBER or None,
             "vobiz": {
                 "configured": vobiz_configured,
-                "from_number": settings.VOBIZ_FROM_NUMBER or None,
                 "status": "ready" if vobiz_configured else "unconfigured",
             },
             "twilio": {
                 "configured": twilio_configured,
-                "from_number": settings.TWILIO_PHONE_NUMBER or None,
                 "status": "ready" if twilio_configured else "unconfigured",
             },
         },

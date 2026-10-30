@@ -394,6 +394,12 @@ Return ONLY a valid JSON object with these exact keys:
             elif is_interested:
                 status = "interested"
                 call.disposition = "interested"
+            elif status == "uncertain":
+                # Gemini's own schema defines "uncertain" for greeting-only /
+                # no-engagement calls. It used to fall through to
+                # not_interested — disposition overwritten and any existing
+                # lead deleted below — on a verdict that means "don't know".
+                pass
             else:
                 status = "not_interested"
                 call.disposition = "not_interested"
@@ -417,7 +423,7 @@ Return ONLY a valid JSON object with these exact keys:
                     "why_interested": why_interested,
                     "why_not_interested": why_not_interested,
                 }
-                phone = customer_info.get("phone") or call.phone_number or call.caller_number
+                phone = customer_info.get("phone") or call.phone_number
                 if not existing_lead:
                     existing_lead = Lead(
                         tenant_id=call.tenant_id,
@@ -443,8 +449,9 @@ Return ONLY a valid JSON object with these exact keys:
                     if customer_info.get("email"):
                         existing_lead.email = customer_info["email"]
                     session.add(existing_lead)
-            else:
-                # If not genuinely interested, ensure FALSE leads are removed from pipeline
+            elif status != "uncertain":
+                # Not genuinely interested -> remove FALSE leads from the
+                # pipeline. An "uncertain" verdict must not destroy a lead.
                 if existing_lead:
                     await session.delete(existing_lead)
 
@@ -561,7 +568,7 @@ Return ONLY a valid JSON object with these exact keys:
                             call_id=call.id,
                             name=customer_info.get("name"),
                             email=customer_info.get("email"),
-                            phone_number=customer_info.get("phone") or call.phone_number or call.caller_number,
+                            phone_number=customer_info.get("phone") or call.phone_number,
                             score=confidence,
                             reason=diag.reason,
                             status="interested",
@@ -588,17 +595,24 @@ Return ONLY a valid JSON object with these exact keys:
 
                 followup_info = None
                 if followup_detector:
-                    f_res = followup_detector.detect_followup_detailed(transcript_text)
-                    if f_res.category_id is not None:
-                        followup_info = {
-                            "category_id": f_res.category_id,
-                            "name": f_res.name,
-                            "description": f_res.description,
-                            "requires_followup": f_res.requires_followup,
-                            "action": f_res.action,
-                            "suggested_scheduled_at": f_res.suggested_scheduled_at,
-                            "matched_utterance": f_res.matched_utterance,
-                        }
+                    # Wrapped like the Gemini path: a detector error here
+                    # used to abort the whole classifier branch AFTER lead /
+                    # disposition changes were staged, leaving them
+                    # half-applied while the caller got a generic fallback.
+                    try:
+                        f_res = followup_detector.detect_followup_detailed(transcript_text)
+                        if f_res.category_id is not None:
+                            followup_info = {
+                                "category_id": f_res.category_id,
+                                "name": f_res.name,
+                                "description": f_res.description,
+                                "requires_followup": f_res.requires_followup,
+                                "action": f_res.action,
+                                "suggested_scheduled_at": f_res.suggested_scheduled_at,
+                                "matched_utterance": f_res.matched_utterance,
+                            }
+                    except Exception as fe:
+                        logger.debug(f"Followup check exception (classifier path): {fe}")
 
                 return {
                     "analysis_id": f"intel_{call.id}",
@@ -695,13 +709,25 @@ Return ONLY a valid JSON object with these exact keys:
         except Exception as ce:
             logger.debug(f"Callback-time scheduling skipped: {ce}")
 
+        # Store the scheduled moment in UTC. next_working_slot returns an
+        # IST-aware datetime; on SQLite, DateTime(timezone=True) persists
+        # the wall-clock WITHOUT converting, so an IST value came back as
+        # naive IST wall-time and the dispatcher (comparing in UTC) fired
+        # callbacks 5.5 hours late. The human-readable note above keeps IST.
+        if scheduled_dt is not None and scheduled_dt.tzinfo is not None:
+            scheduled_dt = scheduled_dt.astimezone(UTC)
+
         followup_record_id = None
         # Auto-create or update Followup record if category requires follow-up
-        call_phone = call.phone_number or call.caller_number
+        call_phone = call.phone_number
         if res.requires_followup and call_phone:
-            stmt = select(Followup).where(Followup.call_id == call.id)
+            stmt = (
+                select(Followup)
+                .where(Followup.call_id == call.id)
+                .order_by(Followup.created_at.desc())
+            )
             db_res = await session.execute(stmt)
-            followup = db_res.scalar_one_or_none()
+            followup = db_res.scalars().first()
             notes_str = f"Category {res.category_id}: {res.name}. Action: {res.action}. (Matched: '{res.matched_utterance or 'N/A'}')" + customer_time_note
 
             if not followup:
@@ -716,13 +742,18 @@ Return ONLY a valid JSON object with these exact keys:
                     notes=notes_str,
                 )
                 session.add(followup)
-            else:
+                await session.flush()
+                followup_record_id = followup.id
+            elif followup.status in ("pending", "scheduled"):
+                # Only a still-open follow-up may be re-scheduled. This used
+                # to reset ANY existing row to pending (resurrecting ones the
+                # dispatcher had completed/cancelled, so customers got called
+                # again) and REPLACED its notes, erasing the dispatcher's
+                # "Auto-call attempt N" markers that cap retries.
                 followup.scheduled_at = scheduled_dt or followup.scheduled_at
-                followup.notes = notes_str
-                followup.status = "pending"
-
-            await session.flush()
-            followup_record_id = followup.id
+                followup.notes = ((followup.notes or "") + " | Re-analysis: " + notes_str)[:1900]
+                await session.flush()
+                followup_record_id = followup.id
 
         return {
             "call_id": call.id,

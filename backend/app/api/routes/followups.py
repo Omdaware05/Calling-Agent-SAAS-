@@ -116,11 +116,14 @@ async def list_followups(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    List scheduled followups, automatically checking and syncing all qualifying calls.
-    """
-    # 1. Silently sync any recent busy / unanswered / failed calls into followups
-    await sync_qualifying_calls_to_followups(db)
+    List scheduled followups.
 
+    This GET used to run sync_qualifying_calls_to_followups first — a
+    read that CREATED pending follow-ups, which the background
+    dispatcher then dialed. Merely viewing this page could place real
+    phone calls. The sync now runs in the dispatcher's per-minute
+    housekeeping instead; this endpoint only reads.
+    """
     t_id = tenant_id or business_id
     stmt = select(Followup).order_by(Followup.created_at.desc())
     if agent_id:

@@ -17,8 +17,9 @@ TRUSTED_AUDIO_HOSTS = {
     "services.dograh.com",
     "cdn.sanity.io",
     "storage.googleapis.com",
-    "localhost",
-    "127.0.0.1",
+    # "localhost" / "127.0.0.1" were in this allowlist — the voice
+    # preview proxy would then fetch ANY internal service on the
+    # backend host itself (SSRF). Loopback is not a trusted audio host.
 }
 
 # Verified default voice catalog for instant selection & fallback

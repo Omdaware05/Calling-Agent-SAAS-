@@ -283,14 +283,18 @@ async def sync_questionnaire_to_agent(db: AsyncSession, agent_id: str, q: Questi
     Connects a questionnaire to an agent: sets agent.questionnaire_id,
     injects formatted questions script into instructions & system prompt,
     and updates the voice workflow in Dograh.
+
+    Returns {"agent_found": bool, "dograh_synced": bool} — this used to
+    fail SILENTLY (missing agent, Dograh errors log-only) while callers
+    reported full success to the UI.
     """
     if not agent_id:
-        return
+        return {"agent_found": False, "dograh_synced": False}
     stmt = select(Agent).where(Agent.id == agent_id)
     res = await db.execute(stmt)
     agent = res.scalar_one_or_none()
     if not agent:
-        return
+        return {"agent_found": False, "dograh_synced": False}
 
     agent.questionnaire_id = q.id
     q.agent_id = agent.id
@@ -303,6 +307,7 @@ async def sync_questionnaire_to_agent(db: AsyncSession, agent_id: str, q: Questi
         agent.instructions = f"{cleaned_instr}\n\n{q_block}" if cleaned_instr else q_block
         agent.system_prompt = agent.instructions
 
+    dograh_synced = False
     try:
         from app.services.dograh_service import dograh_service
         await dograh_service.sync_workflow_to_dograh(
@@ -324,8 +329,10 @@ async def sync_questionnaire_to_agent(db: AsyncSession, agent_id: str, q: Questi
             company_description=agent.company_description,
             greeting_message=agent.greeting_message,
         )
+        dograh_synced = True
     except Exception as e:
         logger.warning(f"Error syncing agent workflow to Dograh: {e}")
+    return {"agent_found": True, "dograh_synced": dograh_synced}
 
 
 @router.post("", status_code=201)
@@ -451,9 +458,17 @@ async def assign_questionnaire(payload: Dict[str, Any], db: AsyncSession = Depen
     if not q_obj:
         raise HTTPException(status_code=404, detail="Questionnaire not found")
 
-    await sync_questionnaire_to_agent(db, agent_id, q_obj)
+    sync_result = await sync_questionnaire_to_agent(db, agent_id, q_obj)
+    if not sync_result["agent_found"]:
+        raise HTTPException(status_code=404, detail="Agent not found")
     await db.commit()
-    return {"success": True, "message": "Questionnaire assigned and connected to agent system prompt"}
+    if not sync_result["dograh_synced"]:
+        return {
+            "success": True,
+            "dograh_synced": False,
+            "message": "Questionnaire assigned and saved to the agent prompt, but the Dograh workflow sync failed — the voice engine may still use the old script until it is re-synced.",
+        }
+    return {"success": True, "dograh_synced": True, "message": "Questionnaire assigned and connected to agent system prompt"}
 
 
 @router.delete("/{questionnaire_id}")

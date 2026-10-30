@@ -1,0 +1,13 @@
+# AI voice server dependencies (local_ai_server.py / local_ai_server_vast.py).
+# These are NOT in requirements.txt: the FastAPI backend does not need
+# torch/transformers, but a fresh environment built only from
+# requirements.txt could not even IMPORT the AI servers (numpy /
+# soundfile / torch are top-level imports; torchaudio / transformers /
+# kokoro-onnx failures silently degraded STT/TTS to "not loaded").
+# Install on the GPU box with:  pip install -r requirements-ai.txt
+numpy>=1.26
+soundfile>=0.12
+torch>=2.1
+torchaudio>=2.1
+transformers>=4.38
+kokoro-onnx>=0.4

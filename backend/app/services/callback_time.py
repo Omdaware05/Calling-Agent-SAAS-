@@ -158,6 +158,7 @@ def parse_callback_time(transcript: str, now: Optional[datetime] = None) -> Opti
 
     # 2) Day selection (Hindi, Marathi, English)
     day_offset: Optional[int] = None
+    named_weekday = False
     if re.search(r"(day after tomorrow|parso|parwa|परसों|परवा)", text, re.IGNORECASE):
         day_offset = 2
     elif re.search(r"(tomorrow|kal|udya|udiya|कल|उद्या)", text, re.IGNORECASE):
@@ -170,6 +171,7 @@ def parse_callback_time(transcript: str, now: Optional[datetime] = None) -> Opti
         for name, weekday in _WEEKDAYS.items():
             if re.search(rf"\b{name}\b", text, re.IGNORECASE):
                 day_offset = (weekday - now.weekday()) % 7
+                named_weekday = True
                 break
 
     clock = _parse_clock(text)
@@ -197,6 +199,11 @@ def parse_callback_time(transcript: str, now: Optional[datetime] = None) -> Opti
     # is still ahead, otherwise tomorrow.
     if day_offset is None and result <= now:
         result += timedelta(days=1)
+    # A NAMED weekday whose time today has already passed means that day
+    # NEXT week ("call me Friday at 5" said Friday 6 pm) — it used to fall
+    # into the past and get clamped to ~now, calling within the hour.
+    if named_weekday and result <= now:
+        result += timedelta(days=7)
     return result
 
 

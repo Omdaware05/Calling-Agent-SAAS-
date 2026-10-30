@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 import logging
+import re
 from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,7 +65,10 @@ class AgentService:
             q_obj = q_res.scalar_one_or_none()
             if q_obj and q_obj.questions:
                 q_block = format_questionnaire_prompt_block(q_obj.title, q_obj.questions)
-                if q_block and q_obj.title.upper() not in instructions.upper():
+                # Dedupe on the script-block header — this used to skip
+                # attaching entirely whenever the questionnaire's TITLE
+                # happened to appear anywhere in the instructions prose.
+                if q_block and "### MANDATORY QUESTIONNAIRE SCRIPT" not in instructions:
                     instructions = f"{instructions.strip()}\n\n{q_block}"
                     system_prompt = instructions
 
@@ -192,12 +196,24 @@ class AgentService:
                     continue
                 setattr(agent, key, value)
 
-        # If questionnaire_id is set or updated, connect to instructions
-        if agent.questionnaire_id:
+        # Rebuild the questionnaire script block ONLY when this request
+        # actually changes the questionnaire link. This used to run on
+        # EVERY edit of a questionnaire-linked agent (even a name-only
+        # change), rewriting the prompt each time and clobbering a
+        # system_prompt edited in the same request — and it silently
+        # STOLE the questionnaire from whichever agent owned it before
+        # by overwriting q_obj.agent_id.
+        if agent.questionnaire_id and "questionnaire_id" in update_dict:
             q_res = await session.execute(select(Questionnaire).where(Questionnaire.id == agent.questionnaire_id))
             q_obj = q_res.scalar_one_or_none()
             if q_obj and q_obj.questions:
-                q_obj.agent_id = agent.id
+                if q_obj.agent_id in (None, agent.id):
+                    q_obj.agent_id = agent.id
+                else:
+                    logger.warning(
+                        f"Questionnaire {q_obj.id} is owned by agent {q_obj.agent_id}; "
+                        f"linking it to agent {agent.id} without stealing ownership."
+                    )
                 q_block = format_questionnaire_prompt_block(q_obj.title, q_obj.questions)
                 cleaned_instr = re.sub(r"\n\n### MANDATORY QUESTIONNAIRE SCRIPT[\s\S]*?(?=\n\n[A-Z#]|$)", "", agent.instructions or "").strip()
                 agent.instructions = f"{cleaned_instr}\n\n{q_block}" if cleaned_instr else q_block

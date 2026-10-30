@@ -110,12 +110,15 @@ async def get_business_report(
             agent_performance[ag_name]["completed"] += 1
 
     for l in leads:
-        # Match lead to first agent or active agent
-        if agent_performance:
-            first_ag = next(iter(agent_performance.keys()))
-            agent_performance[first_ag]["leads"] += 1
-            if l.status in ("qualified", "interested"):
-                agent_performance[first_ag]["qualified"] += 1
+        # Credit each lead to ITS OWN agent (this used to dump every lead
+        # on the first agent in the dict, making per-agent reports wrong
+        # whenever more than one agent existed).
+        ag_name = agent_map.get(l.agent_id, l.agent_id or "Direct Calling Agent")
+        if ag_name not in agent_performance:
+            agent_performance[ag_name] = {"calls": 0, "completed": 0, "leads": 0, "qualified": 0}
+        agent_performance[ag_name]["leads"] += 1
+        if l.status in ("qualified", "interested"):
+            agent_performance[ag_name]["qualified"] += 1
 
     dispositions: Dict[str, int] = {}
     for c in calls:
@@ -197,11 +200,15 @@ async def get_agency_overview(
             agent_performance[ag_name]["completed"] += 1
 
     for l in leads:
-        if agent_performance:
-            first_ag = next(iter(agent_performance.keys()))
-            agent_performance[first_ag]["leads"] += 1
-            if l.status in ("qualified", "interested"):
-                agent_performance[first_ag]["qualified"] += 1
+        # Credit each lead to ITS OWN agent (this used to dump every lead
+        # on the first agent in the dict, making per-agent reports wrong
+        # whenever more than one agent existed).
+        ag_name = agent_map.get(l.agent_id, l.agent_id or "Direct Calling Agent")
+        if ag_name not in agent_performance:
+            agent_performance[ag_name] = {"calls": 0, "completed": 0, "leads": 0, "qualified": 0}
+        agent_performance[ag_name]["leads"] += 1
+        if l.status in ("qualified", "interested"):
+            agent_performance[ag_name]["qualified"] += 1
 
     dispositions: Dict[str, int] = {}
     for c in calls:

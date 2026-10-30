@@ -21,8 +21,14 @@ from app.models.call import Call, Transcript
 from app.models.lead import Lead
 from app.services.lead_intelligence_service import lead_intelligence_service
 
-async def reclassify_all_calls():
-    print("--- Starting Lead Intelligence Re-classification via Gemini ---")
+async def reclassify_all_calls(apply: bool = False):
+    # SAFEGUARD: this script re-analyzes EVERY call (a paid Gemini call
+    # per call) and DELETES every lead whose call is not "interested".
+    # It used to do that unconditionally on any run. Default is now a
+    # DRY RUN (analysis only, all writes rolled back, nothing deleted);
+    # pass --apply to write, in which case all leads are first backed
+    # up to a JSON file next to this script.
+    print(f"--- Lead Intelligence Re-classification ({'APPLY' if apply else 'DRY RUN'}) ---")
     async with AsyncSessionLocal() as session:
         # Load all calls with their transcripts and segments
         stmt = select(Call).options(
@@ -44,7 +50,7 @@ async def reclassify_all_calls():
                 continue
             
             reclassified_count += 1
-            print(f"\nEvaluating Call ID: {call.id} | Phone: {call.phone_number or call.caller_number}")
+            print(f"\nEvaluating Call ID: {call.id} | Phone: {call.phone_number}")
             print(f"Transcript lines: {len(transcript_text.splitlines())}")
             
             try:
@@ -67,9 +73,30 @@ async def reclassify_all_calls():
             except Exception as e:
                 print(f"Error evaluating call {call.id}: {e}")
             await asyncio.sleep(0.3)
-        
+
+        if not apply:
+            await session.rollback()
+            print("\nDRY RUN: analysis writes rolled back; no leads were deleted.")
+            print("Re-run with --apply to persist re-classification and clean stale leads.")
+            return
+
+        # Back up every lead BEFORE any deletion.
+        import json as _json
+        from datetime import datetime as _dt
+        backup_path = os.path.join(os.path.dirname(__file__), f"leads_backup_{_dt.now().strftime('%Y%m%d_%H%M%S')}.json")
+        leads_res = await session.execute(select(Lead))
+        all_leads = leads_res.scalars().all()
+        with open(backup_path, "w", encoding="utf-8") as fh:
+            _json.dump(
+                [{"id": l.id, "call_id": l.call_id, "phone_number": l.phone_number,
+                  "name": l.name, "email": l.email, "status": l.status, "score": l.score,
+                  "reason": l.reason} for l in all_leads],
+                fh, ensure_ascii=False, indent=1,
+            )
+        print(f"Backed up {len(all_leads)} leads to {backup_path}")
+
         await session.commit()
-        
+
         # Verify and clean any stale/orphan leads whose call is not interested
         leads_res = await session.execute(select(Lead))
         all_leads = leads_res.scalars().all()
@@ -99,4 +126,4 @@ async def reclassify_all_calls():
         print(f"==========================================")
 
 if __name__ == "__main__":
-    asyncio.run(reclassify_all_calls())
+    asyncio.run(reclassify_all_calls(apply="--apply" in sys.argv))

@@ -119,7 +119,7 @@ export const TranscriptApiSettings: React.FC = () => {
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     const finalModel = isCustomModel ? customModel.trim() : model;
-    if (!apiKey.trim()) {
+    if (!apiKey.trim() && !config?.is_configured) {
       toast.error('API Key Required', 'Please enter a valid Google Gemini API Key.');
       return;
     }
@@ -129,7 +129,9 @@ export const TranscriptApiSettings: React.FC = () => {
     });
   };
 
-  const isConfigured = Boolean(config?.is_configured && config?.api_key);
+  // The API no longer returns the raw key, so configuration status comes
+  // from the is_configured flag alone.
+  const isConfigured = Boolean(config?.is_configured);
 
   return (
     <div className="space-y-6">

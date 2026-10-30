@@ -738,15 +738,42 @@ class TelephonyService:
                         success = False
                         message = f"Asterisk ARI connection failed: HTTP {r.status_code}"
 
-                else:
-                    # Generic validation for cloudonix/vobiz
-                    if any(bool(v) for v in creds.values()):
+                elif provider == "vobiz":
+                    auth_id = creds.get("auth_id", "").strip()
+                    auth_token = creds.get("auth_token", "").strip()
+                    if not auth_id or not auth_token:
+                        return TelephonyTestResponse(
+                            success=False,
+                            message="Both Auth ID and Auth Token are required for VoBiz.",
+                        )
+                    # Real upstream verification (VoBiz mirrors the Plivo
+                    # API) — this provider used to fall into the generic
+                    # branch below and "pass" with any garbage credentials.
+                    url = f"https://api.vobiz.ai/api/v1/account/{auth_id}"
+                    r = await client.get(
+                        url,
+                        headers={"X-Auth-ID": auth_id, "X-Auth-Token": auth_token},
+                        auth=(auth_id, auth_token),
+                    )
+                    if r.status_code == 200:
                         success = True
-                        message = f"{provider.capitalize()} credentials format validated."
-                        details = {"validated_locally": True}
+                        message = "Connected successfully to VoBiz (account verified upstream)."
+                        details = {"verified": True}
                     else:
                         success = False
+                        message = f"VoBiz authentication failed: HTTP {r.status_code}"
+
+                else:
+                    # No upstream verification exists for this provider in
+                    # the codebase — report that honestly instead of the
+                    # old behaviour: success=True ("validated locally")
+                    # whenever any field was non-empty.
+                    success = False
+                    if any(bool(v) for v in creds.values()):
+                        message = f"{provider.capitalize()} credentials are saved, but this provider cannot be verified automatically — place a test call to confirm they work."
+                    else:
                         message = f"Please enter credentials for {provider}."
+                    details = {"validated_locally": False}
 
         except Exception as err:
             logger.error(f"Error testing telephony provider {provider}: {err}")

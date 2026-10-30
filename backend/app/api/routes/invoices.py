@@ -1,3 +1,4 @@
+import html as html_lib
 import logging
 import random
 from datetime import UTC, datetime, timedelta
@@ -57,7 +58,14 @@ async def list_invoices(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    List invoices for a tenant/business. Seeds demo invoices if none exist yet.
+    List invoices for a tenant/business.
+
+    This GET used to FABRICATE two demo invoices (one marked PAID) when a
+    business had none — merely opening the Billing page created fake
+    financial records, and because the numbers were hard-coded
+    (INV-<year>-0101/0102) against a UNIQUE column, opening Billing for a
+    second business raised IntegrityError and 500'd that business forever.
+    A read endpoint must never write; an empty list is the honest answer.
     """
     b_id = business_id or tenant_id
     query = select(Invoice).order_by(desc(Invoice.created_at))
@@ -66,49 +74,6 @@ async def list_invoices(
 
     result = await db.execute(query)
     invoices = result.scalars().all()
-
-    # If no invoices exist for this business, seed a couple of realistic billing records
-    if not invoices and b_id:
-        seed_invoices = [
-            Invoice(
-                invoice_number=f"INV-{datetime.now(UTC).year}-0101",
-                business_id=b_id,
-                status="PAID",
-                subtotal=240.0,
-                tax=43.20,
-                total=283.20,
-                currency="USD",
-                issue_date=datetime.now(UTC) - timedelta(days=25),
-                due_date=datetime.now(UTC) + timedelta(days=5),
-                notes="AI telephony outbound campaign - 16 hours voice pipeline runtime.",
-                line_items=[
-                    {"description": "AI Outbound Voice Minutes (16 hrs @ $15/hr)", "quantity": 16, "unit_price": 15.0, "amount": 240.0}
-                ],
-            ),
-            Invoice(
-                invoice_number=f"INV-{datetime.now(UTC).year}-0102",
-                business_id=b_id,
-                status="ISSUED",
-                subtotal=450.0,
-                tax=81.0,
-                total=531.0,
-                currency="USD",
-                issue_date=datetime.now(UTC) - timedelta(days=3),
-                due_date=datetime.now(UTC) + timedelta(days=27),
-                notes="Monthly AI Calling Agent Platform Tier & Sarvam Telephony Minutes.",
-                line_items=[
-                    {"description": "Platform Agent Subscription", "quantity": 1, "unit_price": 150.0, "amount": 150.0},
-                    {"description": "Voice Processing & LLM Inference (20 hrs)", "quantity": 20, "unit_price": 15.0, "amount": 300.0},
-                ],
-            ),
-        ]
-        for inv in seed_invoices:
-            db.add(inv)
-        await db.commit()
-
-        # Re-fetch
-        result = await db.execute(query)
-        invoices = result.scalars().all()
 
     return [format_invoice(inv) for inv in invoices]
 
@@ -156,9 +121,15 @@ async def create_invoice(
     tax = round(subtotal * (tax_rate / 100.0), 2)
     total = round(subtotal + tax, 2)
 
-    inv_num = f"INV-{datetime.now(UTC).year}-{random.randint(1000, 9999)}"
+    # Random numbers in a 9000-space collided with the UNIQUE
+    # invoice_number column (birthday effect) -> intermittent 500s.
+    # Generate + insert with a retry on conflict.
+    from sqlalchemy.exc import IntegrityError
 
-    invoice = Invoice(
+    invoice = None
+    for _attempt in range(6):
+        inv_num = f"INV-{datetime.now(UTC).year}-{random.randint(1000, 999999)}"
+        candidate = Invoice(
         invoice_number=inv_num,
         business_id=b_id,
         status="ISSUED",
@@ -172,8 +143,16 @@ async def create_invoice(
         line_items=processed_items,
     )
 
-    db.add(invoice)
-    await db.commit()
+        try:
+            db.add(candidate)
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            continue
+        invoice = candidate
+        break
+    if invoice is None:
+        raise HTTPException(status_code=500, detail="Could not allocate a unique invoice number")
     await db.refresh(invoice)
 
     return format_invoice(invoice)
@@ -227,7 +206,7 @@ async def get_invoice_pdf_html(
 
     items_html = ""
     for item in (inv.line_items or []):
-        desc = item.get("description", "Item")
+        desc = html_lib.escape(str(item.get("description", "Item")))
         qty = item.get("quantity", 1)
         rate = item.get("unit_price", 0.0)
         amt = item.get("amount", round(qty * rate, 2))
@@ -244,7 +223,7 @@ async def get_invoice_pdf_html(
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Invoice {inv.invoice_number}</title>
+    <title>Invoice {html_lib.escape(str(inv.invoice_number))}</title>
     <style>
         body {{
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -418,14 +397,14 @@ async def get_invoice_pdf_html(
             </div>
             <div style="text-align: right;">
                 <div class="badge">{status_label}</div>
-                <div style="font-size: 18px; font-weight: 800; margin-top: 8px; color: #0f172a;">{inv.invoice_number}</div>
+                <div style="font-size: 18px; font-weight: 800; margin-top: 8px; color: #0f172a;">{html_lib.escape(str(inv.invoice_number))}</div>
             </div>
         </div>
 
         <div class="grid">
             <div>
                 <div class="label">Billed To</div>
-                <div class="val">{tenant_name}</div>
+                <div class="val">{html_lib.escape(str(tenant_name))}</div>
                 <div style="font-size: 13px; color: #64748b; margin-top: 4px;">Account ID: {inv.business_id or 'N/A'}</div>
             </div>
             <div style="text-align: right;">
@@ -467,7 +446,7 @@ async def get_invoice_pdf_html(
 
         <div class="notes-box">
             <strong>Notes & Remittance:</strong><br>
-            {inv.notes or "Payment terms: Net 30. Remit via Bank Transfer directly to our designated billing account."}
+            {html_lib.escape(str(inv.notes or "Payment terms: Net 30. Remit via Bank Transfer directly to our designated billing account."))}
         </div>
     </div>
 </body>

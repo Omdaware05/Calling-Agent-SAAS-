@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -23,6 +24,8 @@ from app.services.redis_service import redis_service
 from app.services.storage.s3 import storage_service
 from app.services.telephony_service import telephony_service
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/calls", tags=["calls"], dependencies=[Depends(verify_app_client)])
 
@@ -128,16 +131,28 @@ async def list_calls(
         stmt = stmt.where(Call.campaign_id == campaign_id)
     if t_id:
         stmt = stmt.where(Call.tenant_id == t_id)
+    if state and state.upper() != "ALL":
+        # Filter in SQL BEFORE pagination. This used to filter the mapped
+        # page in Python, so filtered pages came back short and page
+        # boundaries shifted (records silently dropped from the UI).
+        state_to_db = {
+            "QUEUED": ["initiating"],
+            "RINGING": ["ringing"],
+            "CONNECTED": ["in_progress"],
+            "COMPLETED": ["completed"],
+            "BUSY": ["busy"],
+            "NO_ANSWER": ["no_answer"],
+            "FAILED": ["failed"],
+        }
+        db_states = state_to_db.get(state.upper())
+        if db_states:
+            stmt = stmt.where(Call.status.in_(db_states))
 
     stmt = stmt.offset(skip).limit(limit)
     res = await db.execute(stmt)
     calls = res.scalars().all()
 
-    mapped = [map_call_to_document(c) for c in calls]
-    if state and state.upper() != "ALL":
-        mapped = [m for m in mapped if m["state"] == state.upper()]
-
-    return mapped
+    return [map_call_to_document(c) for c in calls]
 
 
 @router.post("/initiate", response_model=InitiateCallResponse)
@@ -457,6 +472,9 @@ async def get_call_recording(
                     await storage_service.upload(call.recording.storage_key, audio_bytes, content_type="audio/wav")
                     if call.recording:
                         call.recording.file_size = len(audio_bytes)
+                        # The stored bytes are now synthesized speech, not
+                        # the original carrier audio — label them honestly.
+                        call.recording.status = "synthesized"
                         await db.commit()
         except Exception:
             pass

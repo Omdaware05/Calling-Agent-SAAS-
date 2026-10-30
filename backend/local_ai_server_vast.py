@@ -61,6 +61,13 @@ try:
             voices_path=str(KOKORO_VOICES_PATH),
         )
         logger.info("Kokoro ONNX TTS initialized successfully.")
+        # Pre-warm: the first synthesis pays model warm-up (~seconds);
+        # doing it at startup keeps the first call's greeting instant.
+        try:
+            kokoro_engine.create(text="नमस्ते", voice="hm_omega", speed=1.0, lang="hi")
+            logger.info("Kokoro pre-warm synthesis complete.")
+        except Exception as _pw:
+            logger.warning(f"Kokoro pre-warm failed (non-fatal): {_pw}")
     else:
         logger.warning(f"Kokoro model files missing at {KOKORO_MODEL_PATH}")
 except Exception as e:
@@ -97,6 +104,83 @@ try:
     logger.info("Whisper Large-v3-Turbo initialized successfully on CUDA.")
 except Exception as e:
     logger.error(f"Failed to load Whisper STT: {e}")
+
+
+# ---------------------------------------------------------------
+# Call-hardening (ported from local_ai_server.py — keep in sync):
+# in-memory TTS cache, silence frames and spoken fallbacks so a
+# backend hiccup degrades a call gracefully instead of breaking it.
+# ---------------------------------------------------------------
+import collections as _collections
+
+_tts_cache = _collections.OrderedDict()
+_TTS_CACHE_MAX = 256
+
+
+def _tts_cache_get(key):
+    val = _tts_cache.get(key)
+    if val is not None:
+        _tts_cache.move_to_end(key)
+    return val
+
+
+def _tts_cache_put(key, val):
+    _tts_cache[key] = val
+    _tts_cache.move_to_end(key)
+    while len(_tts_cache) > _TTS_CACHE_MAX:
+        _tts_cache.popitem(last=False)
+
+
+def _silence_response(response_format: str = "wav"):
+    """A 0.35s silence frame with HTTP 200. The voice engine treats a
+    5xx from the speech endpoint as a dead turn and the call breaks;
+    a short silence keeps the call alive through a transient TTS issue."""
+    sample_rate = 24000
+    n = int(sample_rate * 0.35)
+    if response_format == "pcm":
+        return Response(content=b"\x00\x00" * n, media_type="audio/pcm")
+    buf = io.BytesIO()
+    sf.write(buf, np.zeros(n, dtype=np.float32), sample_rate, format="WAV")
+    return Response(content=buf.getvalue(), media_type="audio/wav")
+
+
+def _spoken_fallback_response(messages, stream: bool):
+    """A short spoken holding line when the LLM backend fails, instead
+    of a 502 the voice engine cannot handle mid-call."""
+    user_text = ""
+    for m in reversed(messages or []):
+        if m.get("role") == "user":
+            user_text = str(m.get("content") or "")
+            break
+    if any(0x0900 <= ord(c) <= 0x097F for c in user_text):
+        line = "एक क्षण रुकिए, मैं आपकी जानकारी देख रही हूँ।"
+    else:
+        line = "One moment please, let me check that for you."
+    created_ts = int(time.time())
+    chat_id = f"chatcmpl-fallback-{int(time.time()*1000)}"
+    if stream:
+        async def _sse():
+            chunk = {
+                "id": chat_id, "object": "chat.completion.chunk", "created": created_ts,
+                "model": "qwen2.5:7b",
+                "choices": [{"index": 0, "delta": {"role": "assistant", "content": line}, "finish_reason": None}],
+            }
+            yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode("utf-8")
+            done = {
+                "id": chat_id, "object": "chat.completion.chunk", "created": created_ts,
+                "model": "qwen2.5:7b",
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+            }
+            yield f"data: {json.dumps(done, ensure_ascii=False)}\n\n".encode("utf-8")
+            yield b"data: [DONE]\n\n"
+        return StreamingResponse(_sse(), media_type="text/event-stream")
+    payload = {
+        "id": chat_id, "object": "chat.completion", "created": created_ts, "model": "qwen2.5:7b",
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": line}, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+    }
+    return JSONResponse(content=payload, status_code=200)
+
 
 # Ollama LLM Configuration
 LLM_BACKEND_URL = "http://127.0.0.1:11434/v1"
@@ -197,7 +281,10 @@ class TTSRequest(BaseModel):
 @app.post("/v1/audio/speech")
 async def generate_speech(req: TTSRequest):
     if not kokoro_engine:
-        raise HTTPException(status_code=503, detail="Local Kokoro TTS engine not loaded")
+        # Was 503 — the voice engine reads that as a dead turn and the
+        # call breaks. A silence frame keeps the call alive instead.
+        logger.error("Kokoro engine not loaded; returning silence frame")
+        return _silence_response(req.response_format or "wav")
 
     try:
         text = req.input.strip()
@@ -218,6 +305,15 @@ async def generate_speech(req: TTSRequest):
         else:
             lang = "en-us"
 
+        # In-memory LRU cache: greetings and repeated script lines are
+        # re-synthesized for every call otherwise (the "welcome speech
+        # initiates late" complaint). Key covers format too.
+        fmt = req.response_format or "wav"
+        cache_key = f"{voice}|{speed}|{lang}|{fmt}|{text}"
+        cached = _tts_cache_get(cache_key)
+        if cached is not None:
+            return Response(content=cached, media_type="audio/pcm" if fmt == "pcm" else "audio/wav")
+
         # Kokoro synthesis
         samples, sample_rate = kokoro_engine.create(
             text=text,
@@ -226,21 +322,26 @@ async def generate_speech(req: TTSRequest):
             lang=lang,
         )
 
-        if req.response_format == "pcm":
+        if fmt == "pcm":
             pcm_data = (np.clip(samples, -1.0, 1.0) * 32767.0).astype(np.int16).tobytes()
             logger.info(f"Local Kokoro synthesized {len(pcm_data)} raw PCM bytes (voice={voice}, speed={speed}, lang={lang}) for: '{text[:40]}...'")
+            _tts_cache_put(cache_key, pcm_data)
             return Response(content=pcm_data, media_type="audio/pcm")
 
         out_io = io.BytesIO()
         sf.write(out_io, samples, sample_rate, format="WAV")
         wav_bytes = out_io.getvalue()
         logger.info(f"Local Kokoro synthesized {len(wav_bytes)} WAV bytes (voice={voice}, speed={speed}, lang={lang}) for: '{text[:40]}...'")
+        _tts_cache_put(cache_key, wav_bytes)
 
         return Response(content=wav_bytes, media_type="audio/wav")
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error in speech synthesis: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        # Was HTTP 500 — same dead-turn problem as the 503 above.
+        logger.error(f"Error in speech synthesis (returning silence): {e}", exc_info=True)
+        return _silence_response(req.response_format or "wav")
 
 
 try:
@@ -251,7 +352,7 @@ except ImportError:
     except ImportError:
         FastQuestionnaireOrchestrator = None
 
-http_client = httpx.AsyncClient(timeout=60.0)
+http_client = httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=3.0))
 
 def clean_speech_text(text: str, is_subsequent: bool = False) -> str:
     """Cleans LLM response text for speech synthesis: strips brackets, leading repeated greetings, formatting, and incomplete trailing sentences."""
@@ -452,8 +553,15 @@ async def chat_completions_proxy(request: Request):
             media_type=resp.headers.get("content-type"),
         )
     except Exception as e:
-        logger.error(f"Error proxying to LLM backend: {e}")
-        raise HTTPException(status_code=502, detail=f"LLM backend proxy error: {e}")
+        # Was HTTP 502 — the voice engine cannot use an error body
+        # mid-call, so the call broke. Return a short spoken holding
+        # line in the expected response shape instead.
+        logger.error(f"Error proxying to LLM backend (spoken fallback): {e}")
+        try:
+            _msgs = json.loads(body).get("messages", [])
+        except Exception:
+            _msgs = []
+        return _spoken_fallback_response(_msgs, stream)
 
 
 if __name__ == "__main__":

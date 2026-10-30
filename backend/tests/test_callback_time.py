@@ -97,3 +97,18 @@ if __name__ == "__main__":
         fn()
         print("PASS", fn.__name__)
     print(f"{len(fns)}/{len(fns)} callback-time tests passed")
+
+
+def test_named_weekday_already_past_means_next_week():
+    # Friday 2026-10-30 18:00 IST: "call me Friday at 5 pm" must mean NEXT
+    # Friday (2026-11-06 17:00), not today 17:00 clamped to ~now.
+    fri_evening = datetime(2026, 10, 30, 18, 0, tzinfo=IST)
+    got = schedule_from_transcript("Customer: call me Friday at 5 pm", now=fri_evening)
+    assert got == datetime(2026, 11, 6, 17, 0, tzinfo=IST), got
+
+
+def test_named_weekday_still_ahead_stays_this_week():
+    # NOW is Thursday 2026-10-29 14:00 -> "Friday at 5 pm" is tomorrow,
+    # Friday 2026-10-30 17:00.
+    got = schedule_from_transcript("Customer: call me Friday at 5 pm", now=NOW)
+    assert got == datetime(2026, 10, 30, 17, 0, tzinfo=IST), got

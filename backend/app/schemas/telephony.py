@@ -8,12 +8,6 @@ class ProviderFieldOption(BaseModel):
     value: str
 
 
-class ProviderFieldCondition(BaseModel):
-    field: str
-    operator: str
-    value: Any
-
-
 class ProviderFieldSchema(BaseModel):
     name: str
     label: str

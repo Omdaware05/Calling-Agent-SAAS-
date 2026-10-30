@@ -288,9 +288,13 @@ async def generate_speech(req: TTSRequest):
         return Response(content=cached_audio, media_type=media)
 
     # 1. Primary High-Speed Accelerated Docker Kokoro CUDA (350ms vs 5000ms CPU)
+    # Only attempted when actually configured — otherwise every uncached
+    # synthesis would first burn a multi-second connection timeout here.
     docker_url = os.getenv("KOKORO_DOCKER_URL", "http://localhost:8880")
-    docker_key = os.getenv("KOKORO_DOCKER_KEY", "kokoro-87c72016c99d8bdcb42345e147e24d656f3e3436057cd963")
-    try:
+    docker_key = os.getenv("KOKORO_DOCKER_KEY", "")
+    docker_configured = bool(os.getenv("KOKORO_DOCKER_KEY") or os.getenv("KOKORO_DOCKER_URL"))
+    if docker_configured:
+      try:
         t0 = time.time()
         headers = {
             "Authorization": f"Bearer {docker_key}",
@@ -316,7 +320,7 @@ async def generate_speech(req: TTSRequest):
             logger.info(f"Kokoro Docker CUDA synthesized {len(audio_bytes)} WAV bytes in {dur}ms (voice={voice}, speed={speed}) for: '{text[:35]}...'")
             _tts_cache_put(cache_key, audio_bytes)
             return Response(content=audio_bytes, media_type="audio/wav")
-    except Exception as docker_err:
+      except Exception as docker_err:
         logger.warning(f"Kokoro Docker unavailable ({docker_err}), falling back to local ONNX engine...")
 
     # 2. Fallback to Local Kokoro ONNX

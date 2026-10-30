@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import json
 import logging
 import re
@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import httpx
 import phonenumbers
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -151,9 +152,20 @@ async def persist_post_call_artifacts(session: AsyncSession, call: Call, payload
         transcript = res.scalar_one_or_none()
 
         if not transcript:
-            transcript = Transcript(call_id=call.id, created_at=datetime.now(UTC))
-            session.add(transcript)
-            await session.flush()
+            # Insert inside a SAVEPOINT: two concurrent writers (a webhook
+            # and a hangup, or the dispatcher and a request) can both miss
+            # the SELECT above and both insert — the loser used to hit the
+            # UNIQUE constraint on transcripts.call_id, which poisoned the
+            # whole session transaction (the caller's commit then failed
+            # with PendingRollbackError and the call was never finalized).
+            try:
+                async with session.begin_nested():
+                    transcript = Transcript(call_id=call.id, created_at=datetime.now(UTC))
+                    session.add(transcript)
+                    await session.flush()
+            except IntegrityError:
+                res = await session.execute(stmt)
+                transcript = res.scalar_one_or_none()
 
         # Check if segments already exist
         seg_stmt = select(TranscriptSegment).where(TranscriptSegment.transcript_id == transcript.id)
@@ -340,6 +352,10 @@ async def persist_post_call_artifacts(session: AsyncSession, call: Call, payload
 
             file_size = len(audio_data)
             recording = (await session.execute(select(Recording).where(Recording.call_id == call.id))).scalar_one_or_none()
+            # NOTE: audio reconstructed from the transcript (no real
+            # recording existed) is labelled status "synthesized" below,
+            # never "ready" — generated audio must not masquerade as a
+            # genuine carrier recording.
             if not recording:
                 recording = Recording(
                     tenant_id=call.tenant_id,
@@ -349,13 +365,13 @@ async def persist_post_call_artifacts(session: AsyncSession, call: Call, payload
                     content_type="audio/wav",
                     file_size=file_size,
                     duration=dur,
-                    status="ready",
+                    status="synthesized",
                 )
                 session.add(recording)
             else:
                 recording.storage_key = storage_key
                 recording.bucket = bucket_name
-                recording.status = "ready"
+                recording.status = "synthesized"
                 recording.file_size = file_size
                 recording.duration = dur
 
@@ -393,7 +409,7 @@ async def persist_post_call_artifacts(session: AsyncSession, call: Call, payload
                         contact_id=call.contact_id,
                         agent_id=call.agent_id,
                         call_id=call.id,
-                        phone_number=call.phone_number or call.caller_number,
+                        phone_number=call.phone_number,
                         status="interested",
                         score=intel.get("confidence_score", 0.85),
                         reason=intel.get("reasoning", call.disposition),
@@ -413,7 +429,7 @@ async def persist_post_call_artifacts(session: AsyncSession, call: Call, payload
             followup = f_res.scalar_one_or_none()
 
             f_info = intel.get("followup") or {}
-            call_phone = call.phone_number or call.caller_number
+            call_phone = call.phone_number
 
             # Check all conditions for follow-up
             is_busy = call.status in ("busy", "line_busy") or (call.termination_reason or "").lower() in ("busy", "line_busy")
@@ -488,7 +504,7 @@ async def persist_post_call_artifacts(session: AsyncSession, call: Call, payload
                     followup.scheduled_at = scheduled_time or followup.scheduled_at
                     followup.status = "scheduled" 
         except Exception as e:
-            logger.debug(f"Lead intelligence & followup auto-analysis notice: {e}")
+            logger.warning(f"Lead intelligence & followup auto-analysis failed: {e}")
 
         # -------------------------------------------------------------
         # 5. Export artifacts to central data/ folder (transcripts & intel)
@@ -514,7 +530,7 @@ async def persist_post_call_artifacts(session: AsyncSession, call: Call, payload
 
             data_exporter.export_call_transcript(
                 call_id=call.id,
-                phone_number=call.phone_number or call.caller_number or "",
+                phone_number=call.phone_number or "",
                 agent_name=agent_name,
                 duration=float(call.duration or 0.0),
                 disposition=call.disposition or call.status or "completed",
@@ -525,7 +541,7 @@ async def persist_post_call_artifacts(session: AsyncSession, call: Call, payload
                 data_exporter.export_call_intelligence(
                     call_id=call.id,
                     intelligence_data=intel,
-                    phone_number=call.phone_number or call.caller_number or "",
+                    phone_number=call.phone_number or "",
                     disposition=call.disposition or call.status or "",
                 )
         except Exception as export_err:
@@ -707,7 +723,23 @@ class CallService:
                 },
             )
             await redis_service.record_call_event_metric("call.created")
-            await redis_service.acquire_concurrency_slot(agent.id)
+            # The per-agent concurrency cap (10) was computed but its
+            # result DISCARDED — campaign dialing could exceed the cap
+            # without limit. The helper fails open (True) when Redis is
+            # down, so an explicit False is a genuine over-limit.
+            slot_acquired = await redis_service.acquire_concurrency_slot(agent.id)
+            if slot_acquired is False:
+                call.status = STATUS_FAILED
+                call.termination_reason = "concurrency_limit"
+                call.ended_at = datetime.now(UTC)
+                await session.commit()
+                raise CallServiceException(
+                    message=f"Agent '{agent.name}' already has the maximum number of concurrent calls in progress. Please retry shortly.",
+                    status_code=429,
+                    error_code="AGENT_CONCURRENCY_LIMIT",
+                )
+        except CallServiceException:
+            raise
         except Exception as e:
             logger.debug(f"Redis session tracking note: {e}")
 
@@ -1041,8 +1073,25 @@ class CallService:
             logger.warning(f"Webhook received for unknown call: call_id={payload.call_id}, run_id={payload.workflow_run_id}")
             return None
 
-        new_status = normalize_dograh_status(payload.status) if payload.status else STATUS_COMPLETED
+        # A webhook without a status used to be treated as COMPLETED, and
+        # ANY event (even "ringing") finalized the call: ended_at set and
+        # full post-call analysis run on partial data. A late non-terminal
+        # event could even resurrect a finished call. Rules now:
+        # - missing status -> keep the current status;
+        # - a terminal call never moves backwards (late/duplicate events
+        #   are acknowledged and ignored);
+        # - ended_at + post-call artifacts only on terminal transitions.
+        if payload.status:
+            new_status = normalize_dograh_status(payload.status)
+        else:
+            new_status = call.status
+
+        if call.status in TERMINAL_STATES and new_status not in TERMINAL_STATES:
+            logger.info(f"Ignoring late webhook for finished call {call.id}: {payload.status!r} would move {call.status} -> {new_status}")
+            return call
+
         call.status = new_status
+        is_terminal = new_status in TERMINAL_STATES
 
         if payload.duration is not None:
             call.duration = payload.duration
@@ -1056,11 +1105,12 @@ class CallService:
         if payload.recording_url:
             call.recording_url = payload.recording_url
 
-        if not call.ended_at:
+        if is_terminal and not call.ended_at:
             call.ended_at = datetime.now(UTC)
 
         await persist_call_event(session, call.id, f"call.{new_status}", payload.model_dump(exclude_none=True))
-        await persist_post_call_artifacts(session, call, payload.model_dump())
+        if is_terminal:
+            await persist_post_call_artifacts(session, call, payload.model_dump())
 
         await session.commit()
         await session.refresh(call)

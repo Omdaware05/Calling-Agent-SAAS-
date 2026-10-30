@@ -12,14 +12,20 @@ class FastQuestionnaireOrchestrator:
     and polite refusals in < 2ms, completely bypassing slow LLM generation.
     """
 
-    # Refusal and negative intent regex patterns across Marathi, Hindi, English
+    # Refusal and negative intent regex patterns across Marathi, Hindi, English.
+    # The telephony verbs (disconnect / kat do / band karo) now require a
+    # call/phone subject or a standalone utterance: bare matches ended
+    # calls on ordinary support sentences like "Internet disconnect ho
+    # raha hai" or "mera net band ho gaya" — a complaint, not a refusal.
     REFUSAL_PATTERN = re.compile(
         r"\b(?:nahi\s+chahiye|chahiye\s+nahi|rehne\s+do|rehne\s+dijiye|rahude|"
-        r"rahu\s+dya|garaj\s+nahi|interest\s+nahi|mat\s+karo|band\s+karo|not\s+interested|"
+        r"rahu\s+dya|garaj\s+nahi|interest\s+nahi|mat\s+karo|not\s+interested|"
         r"don'?t\s+need|don'?t\s+want|stop\s+calling|dnc|remove\s+my\s+number|"
-        r"wrong\s+number|kat\s+do|kaat\s+do|disconnect|cut\s+the\s+call|"
+        r"wrong\s+number|cut\s+the\s+call|"
+        r"(?:call|phone|फोन|कॉल)\s+(?:disconnect|kat\s+do|kaat\s+do|band\s+karo)|"
+        r"disconnect\s+kar\s+do|"
         r"no\s+thanks|no\s+thank\s+you|nahi\s+bhai|nako\s+re|nako\s+baba|nakoy)\b|"
-        r"^(?:no|nope|nahi|nahin|nako|नको|नाही|नहीं)[.!?, ]*$|"
+        r"^(?:no|nope|nahi|nahin|nako|नको|नाही|नहीं|kat\s+do|kaat\s+do|band\s+karo)[.!?, ]*$|"
         r"नको\s+आहे|गरज\s+नाही|रस\s+नाही|नाही\s+पाहिजे|नकोय|फोन\s+करू\s+नका|"
         r"नहीं\s+चाहिए|रहने\s+दो|रहने\s+दीजिए|राहू\s+द्या|कॉल\s+काटो|फोन\s+मत\s+करो",
         re.IGNORECASE

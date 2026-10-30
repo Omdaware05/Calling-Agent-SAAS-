@@ -174,8 +174,14 @@ class SarvamTelephonyService:
             or data.get("CallUUID")
             or data.get("request_uuid")
             or data.get("RequestUUID")
-            or f"vb-{uuid.uuid4().hex[:12]}"
         )
+        if not call_uuid:
+            # A 2xx without a carrier UUID used to get a FABRICATED id
+            # ("vb-<random>") stored as telephony_call_id — every later
+            # hangup/status operation then targeted a call that does not
+            # exist at the carrier and failed silently.
+            logger.error(f"[SarvamTelephony] VoBiz accepted the call but returned no call UUID. Raw response: {str(data)[:300]}")
+            raise RuntimeError("VoBiz call initiation returned no call UUID; treating as failed so the call is not tracked against a fabricated id.")
         logger.info(f"[SarvamTelephony] VoBiz call fired successfully. UUID: {call_uuid}")
         return {
             "status": "success",
@@ -290,15 +296,21 @@ class SarvamTelephonyService:
             return False
         t = text.lower().strip()
 
-        # Direct refusal & call-cut keywords
+        # Direct refusal & call-cut keywords.
+        # NOTE: callback/busy phrases ("call later", "बाद में बात",
+        # "busy right now", "अभी बिजी"...) are NOT here anymore — they
+        # used to end the call AND stamp disposition=not_interested, so
+        # the exact customers the callback system exists to recover were
+        # permanently written off mid-call. They are handled separately
+        # by is_callback_request() with disposition=callback_requested.
         refusal_keywords = [
             "नहीं चाहिए", "नहीं चाहिये", "नहीं लेना", "नहीं चाहिए जी", "नहीं चाहिए मुझे",
             "कट कर", "कट करो", "काट दो", "काट दीजिए", "काटो", "फोन रखो", "फोन काट",
             "रखो फोन", "रहने दो", "रहने दीजिए", "मत करो", "फोन मत करो", "कॉल मत",
             "नहीं नहीं", "नहीं जी", "नहीं भाई", "नहीं थैंक यू", "नहीं धन्यवाद", "थैंक यू नहीं",
-            "बाद में बात", "बाद में करो", "अभी बिजी", "बिजी हूँ", "व्यस्त हूँ", "गलत नंबर", "रॉन्ग नंबर",
+            "गलत नंबर", "रॉन्ग नंबर",
             "not interested", "no thanks", "don't call", "cut the call", "cut it", "hang up",
-            "stop calling", "wrong number", "busy right now", "call later", "bye", "अलविदा",
+            "stop calling", "wrong number", "bye", "अलविदा",
             "बंद करो", "रख दीजिए", "नही चाहिए", "काट दिजिये", "काट दीजिये",
             "नको", "नाही", "नको मला", "काही नको", "रुचि नहीं", "इंटरेस्ट नहीं", "नॉट इंटरेस्टेड",
             "nahi chahiye", "nahi lena", "nahi re", "nahi bhai", "no need", "not needed",
@@ -317,6 +329,29 @@ class SarvamTelephonyService:
             return True
 
         return False
+
+    @staticmethod
+    def is_callback_request(text: str) -> bool:
+        """Customer is busy / wants the call at another time — a callback
+        to schedule, not a refusal. Returns False when a hard refusal or
+        opt-out is also present ("not interested, call later" is a no)."""
+        if not text:
+            return False
+        t = text.lower().strip()
+        hard_negatives = (
+            "not interested", "don't call", "do not call", "stop calling",
+            "नहीं चाहिए", "नही चाहिए", "wrong number", "गलत नंबर",
+        )
+        if any(h in t for h in hard_negatives):
+            return False
+        callback_phrases = (
+            "call later", "call me later", "call back", "callback",
+            "बाद में बात", "बाद में करो", "बाद में कॉल", "बाद में call",
+            "फिर कॉल", "फिर call", "अभी बिजी", "बिजी हूँ", "बिजी हूं",
+            "व्यस्त हूँ", "व्यस्त हूं", "busy right now", "busy now",
+            "अभी बात नहीं", "बाद में बात करेंगे",
+        )
+        return any(p in t for p in callback_phrases)
 
     async def synthesize_speech(
         self,
@@ -701,6 +736,9 @@ class SarvamTelephonyService:
         logger.info(f"[SarvamTelephony] VoBiz WebSocket connected for Call ID: {call_id}")
 
         call_start_time = time.time()
+        agent = None  # must exist before the DB block: if the Call row is
+        # missing, the `if not agent:` guard below used to raise
+        # UnboundLocalError instead of cleanly closing the socket.
         carrier_call_uuid: Optional[str] = None
         carrier_auth_id = settings.VOBIZ_AUTH_ID
         carrier_auth_token = settings.VOBIZ_AUTH_TOKEN
@@ -966,7 +1004,7 @@ class SarvamTelephonyService:
                 "busy right now", "नंतर बोला ना", "नंतर करा", "बाद में करना", "कल कॉल", "उद्या फोन",
                 "उद्या करा", "नंतर सांगतो", "बाद में बताऊंगा"
             ]
-            if greeting_delivered and any(k in user_text.lower() for k in callback_keywords):
+            if greeting_delivered and (any(k in user_text.lower() for k in callback_keywords) or self.is_callback_request(user_text)):
                 logger.info(f"[SarvamTelephony] Caller requested callback / busy: '{user_text}'. Concluding with callback promise.")
                 if "mr" in lang_code:
                     cb_farewell = "नक्कीच! आम्ही तुम्हाला नंतर सोयीच्या वेळी पुन्हा कॉल करू. वेळ दिल्याबद्दल खूप धन्यवाद, नमस्कार!"
@@ -1071,11 +1109,13 @@ class SarvamTelephonyService:
                 except Exception as hangup_err:
                     logger.warning(f"[SarvamTelephony] Carrier hangup error: {hangup_err}")
 
-                # Mark disposition in DB as not_interested
+                # Mark disposition in DB: callback requests must stay
+                # recoverable by the follow-up system, not be written
+                # off as not_interested.
                 async with AsyncSessionLocal() as session:
                     c = await session.get(Call, call_id)
                     if c:
-                        c.disposition = "not_interested"
+                        c.disposition = "callback_requested" if callback_requested else "not_interested"
                         await session.commit()
 
                 try:
@@ -1287,7 +1327,13 @@ class SarvamTelephonyService:
                 except asyncio.TimeoutError:
                     logger.info(f"[SarvamTelephony] Inactivity watchdog: zero audio received for 6.0s on call {call_id} (caller disconnected). Concluding call.")
                     break
-                msg = json.loads(msg_text)
+                try:
+                    msg = json.loads(msg_text)
+                except (ValueError, TypeError):
+                    # One malformed/partial carrier frame must not kill a
+                    # live call (the finally-block hangs up on exceptions).
+                    logger.warning(f"[SarvamTelephony] Ignoring malformed media frame on call {call_id}: {str(msg_text)[:80]!r}")
+                    continue
                 event = msg.get("event")
 
                 # Handle VoBiz stream start event
@@ -1442,15 +1488,26 @@ class SarvamTelephonyService:
                 logger.warning(f"[SarvamTelephony] Failed to upload call recording: {e}")
 
             # 2. Update Database with Recording row and Call recording_url
+            # The final status used to be hard-coded "completed" — calls
+            # where the socket died instantly or no caller audio ever
+            # arrived were recorded as successful conversations, poisoning
+            # outcome stats and retry logic. Derive it from what happened.
+            had_conversation = bool(customer_audio_events) or (bool(recorded_timeline) and call_duration >= 3)
+            is_authentic_audio = bool(recorded_timeline and customer_audio_events)
             async with AsyncSessionLocal() as session:
                 call = await session.get(Call, call_id)
                 if call:
-                    call.status = "completed"
+                    call.status = "completed" if had_conversation else "failed"
+                    if not had_conversation:
+                        call.termination_reason = call.termination_reason or "no_caller_audio"
                     call.ended_at = datetime.now(UTC)
                     call.duration = call_duration
                     call.transcript_url = f"/api/v1/calls/{call.id}/transcript"
                     call.recording_url = f"/api/v1/calls/{call.id}/recording"
 
+                    # Synthesized/reconstructed audio must not masquerade
+                    # as a genuine recording (see call_service note).
+                    rec_status = "ready" if is_authentic_audio else "synthesized"
                     rec_stmt = select(Recording).where(Recording.call_id == call_id)
                     rec = (await session.execute(rec_stmt)).scalar_one_or_none()
                     if not rec:
@@ -1462,14 +1519,14 @@ class SarvamTelephonyService:
                             content_type="audio/wav",
                             file_size=len(wav_bytes),
                             duration=call_duration,
-                            status="ready",
+                            status=rec_status,
                         )
                         session.add(rec)
                     else:
                         rec.storage_key = storage_key
                         rec.file_size = len(wav_bytes)
                         rec.duration = call_duration
-                        rec.status = "ready"
+                        rec.status = rec_status
 
                     try:
                         await session.commit()
@@ -1563,7 +1620,7 @@ class SarvamTelephonyService:
 
                         data_exporter.export_call_transcript(
                             call_id=call_id,
-                            phone_number=call.phone_number or call.caller_number or "",
+                            phone_number=call.phone_number or "",
                             agent_name=agent_name,
                             duration=call_duration,
                             disposition=call.disposition or "completed",
@@ -1574,7 +1631,7 @@ class SarvamTelephonyService:
                             data_exporter.export_call_intelligence(
                                 call_id=call_id,
                                 intelligence_data=intel,
-                                phone_number=call.phone_number or call.caller_number or "",
+                                phone_number=call.phone_number or "",
                                 disposition=call.disposition or "",
                             )
                         await session.commit()

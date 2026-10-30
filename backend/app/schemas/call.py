@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class InitiateCallRequest(BaseModel):
@@ -35,6 +35,31 @@ class CallStatusResponse(BaseModel):
 
 
 class CallHistoryItem(BaseModel):
+    @model_validator(mode="before")
+    @classmethod
+    def _sync_orm_aliases(cls, data):
+        # Call ORM objects carry `id`, not `call_id` — validating one
+        # directly used to raise ValidationError despite
+        # from_attributes=True inviting exactly that usage.
+        if not isinstance(data, dict) and hasattr(data, "id"):
+            return {
+                "call_id": str(data.id),
+                "dograh_run_id": getattr(data, "dograh_run_id", None),
+                "phone_number": getattr(data, "phone_number", ""),
+                "agent_id": getattr(data, "agent_id", ""),
+                "tenant_id": getattr(data, "tenant_id", None),
+                "campaign_id": getattr(data, "campaign_id", None),
+                "status": getattr(data, "status", ""),
+                "started_at": getattr(data, "started_at", None) or getattr(data, "created_at", None),
+                "ended_at": getattr(data, "ended_at", None),
+                "duration": getattr(data, "duration", None),
+                "disposition": getattr(data, "disposition", None),
+                "transcript_url": getattr(data, "transcript_url", None),
+                "recording_url": getattr(data, "recording_url", None),
+                "created_at": getattr(data, "created_at", None),
+            }
+        return data
+
     call_id: str
     dograh_run_id: Optional[int] = None
     phone_number: str

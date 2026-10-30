@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # Dograh API Settings
     DOGRAH_BASE_URL: str = "http://localhost:8000"
     DOGRAH_API_KEY: str = "sk-placeholder-key-for-local-dev"
-    DOGRAH_MPS_KEY: str = "oss_sk_yV7obDwIeYaTeOrcllPfnJAplrcduHwe"
+    DOGRAH_MPS_KEY: str = ""
 
     # Custom Backend Server Settings
     BACKEND_HOST: str = "0.0.0.0"

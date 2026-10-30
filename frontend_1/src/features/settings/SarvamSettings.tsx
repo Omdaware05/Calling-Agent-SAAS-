@@ -126,7 +126,9 @@ export const SarvamSettings: React.FC = () => {
   });
 
   const handleSave = (setActive = false) => {
-    if (!apiKey.trim()) {
+    // A blank key means "keep the existing one" once a key is configured
+    // (the API no longer returns the raw key to prefill this field).
+    if (!apiKey.trim() && !config?.is_configured) {
       toast.error('Validation Error', 'Sarvam AI API key is required.');
       return;
     }

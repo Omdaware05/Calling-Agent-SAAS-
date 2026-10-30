@@ -45,18 +45,23 @@ async def seed_initial_data_if_needed():
             if not tel_config:
                 vobiz_id = getattr(settings, "VOBIZ_AUTH_ID", "")
                 vobiz_token = getattr(settings, "VOBIZ_AUTH_TOKEN", "")
-                from_num = getattr(settings, "VOBIZ_FROM_NUMBER", "+918065354620")
+                # No baked-in fallback number: a fresh install used to be
+                # seeded with a hard-coded caller number the operator may
+                # not own, marked ready-to-dial with EMPTY credentials —
+                # telephony looked configured and only failed at dial time.
+                from_num = getattr(settings, "VOBIZ_FROM_NUMBER", "") or ""
+                creds_present = bool(vobiz_id and vobiz_token)
 
                 import json
                 tel_config = TelephonyConfig(
                     provider="vobiz",
                     name="VoBiz Primary Trunk",
                     credentials_json=json.dumps({"auth_id": vobiz_id, "auth_token": vobiz_token}),
-                    default_from_number=from_num,
+                    default_from_number=from_num or None,
                     from_numbers=[from_num] if from_num else [],
                     is_default_outbound=True,
-                    is_ready_for_outbound=True,
-                    status="active",
+                    is_ready_for_outbound=creds_present,
+                    status="active" if creds_present else "unconfigured",
                 )
                 session.add(tel_config)
                 logger.info("[Seeder] Initialized default VoBiz telephony config")
