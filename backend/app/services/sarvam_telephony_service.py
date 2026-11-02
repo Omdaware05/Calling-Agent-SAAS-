@@ -895,24 +895,27 @@ class SarvamTelephonyService:
         barge_in_streak = 0
         agent_speech_started_time = 0.0
 
+        playback_lock = asyncio.Lock()
+
         async def play_audio_task(mulaw_data: bytes):
             nonlocal is_agent_speaking, agent_finished_speaking_time, agent_speech_started_time
-            is_agent_speaking = True
-            agent_speech_started_time = time.time()
+            async with playback_lock:
+                is_agent_speaking = True
+                agent_speech_started_time = time.time()
 
-            def on_chunk(chunk: bytes):
-                recorded_timeline.append((time.time() - call_start_time, "agent", chunk))
+                def on_chunk(chunk: bytes):
+                    recorded_timeline.append((time.time() - call_start_time, "agent", chunk))
 
-            try:
-                await self.stream_audio_to_vobiz(
-                    websocket,
-                    stream_id or call_id,
-                    mulaw_data,
-                    on_chunk_sent=on_chunk,
-                )
-            finally:
-                is_agent_speaking = False
-                agent_finished_speaking_time = time.time()
+                try:
+                    await self.stream_audio_to_vobiz(
+                        websocket,
+                        stream_id or call_id,
+                        mulaw_data,
+                        on_chunk_sent=on_chunk,
+                    )
+                finally:
+                    is_agent_speaking = False
+                    agent_finished_speaking_time = time.time()
 
         async def deliver_greeting():
             nonlocal greeting_delivered, greeting_started_time, sequence_counter
@@ -961,23 +964,25 @@ class SarvamTelephonyService:
 
             # Update context_state from caller speech
             u_clean = user_text.lower()
-            if "गहू" in u_clean or "wheat" in u_clean:
-                context_state["crop"] = "गहू"
+            if "गहू" in u_clean or "wheat" in u_clean or "गेहूं" in u_clean or "गेहूँ" in u_clean:
+                context_state["crop"] = "गेहूँ" if "hi" in lang_code else "गहू"
             elif "हरभरा" in u_clean or "चना" in u_clean or "chana" in u_clean:
-                context_state["crop"] = "हरभरा"
+                context_state["crop"] = "चना" if "hi" in lang_code else "हरभरा"
+            elif "सरसों" in u_clean or "मोहरी" in u_clean or "mustard" in u_clean:
+                context_state["crop"] = "सरसों" if "hi" in lang_code else "मोहरी"
 
-            if "आता" in u_clean or "now" in u_clean:
-                context_state["timing"] = "आता"
-            elif "नंतर" in u_clean or "later" in u_clean:
-                context_state["timing"] = "नंतर"
+            if "आता" in u_clean or "now" in u_clean or "अभी" in u_clean:
+                context_state["timing"] = "अभी" if "hi" in lang_code else "आता"
+            elif "नंतर" in u_clean or "later" in u_clean or "बाद में" in u_clean:
+                context_state["timing"] = "बाद में" if "hi" in lang_code else "नंतर"
 
             import re
-            acre_match = re.search(r"(\d+|एक|दोन|तीन|चार|पाच|सहा|सात|आठ|नऊ|दहा)\s*(?:एकर|एकड़)", user_text)
+            acre_match = re.search(r"(\d+|एक|दो|तीन|चार|पांच|छह|सात|आठ|नौ|दस|दोन|पाच|सहा|नऊ|दहा)\s*(?:एकर|एकड़)", user_text)
             if acre_match:
                 context_state["acreage"] = acre_match.group(0)
                 logger.info(f"[SarvamTelephony] Saved context: Acreage = {context_state['acreage']}")
 
-            qty_match = re.search(r"(\d+|वीस|तीस|चाळीस|पन्नास|शंभर|दोनशे)\s*(?:किलो|बॅग)", user_text)
+            qty_match = re.search(r"(\d+|एक|दो|तीन|चार|पांच|दस|बीस|तीस|चालीस|पचास|सौ|दो सौ|वीस|तीस|चाळीस|पन्नास|शंभर|दोनशे)\s*(?:किलो|बैग|बॅग)", user_text)
             if qty_match:
                 context_state["quantity"] = qty_match.group(0)
                 logger.info(f"[SarvamTelephony] Saved context: Quantity = {context_state['quantity']}")
@@ -1145,7 +1150,7 @@ class SarvamTelephonyService:
             # 4. Generate next turn via Structured Dialogue Engine & Context Memory
             agent_speech_start = time.time()
             prev_agent_texts = [m["content"] for m in conversation_history if m.get("role") == "assistant"]
-            is_agri_agent = (getattr(agent, "id", "") == "agent-samruddhi-agritech") or ("samruddhi" in (getattr(agent, "name", "")).lower())
+            is_agri_agent = (getattr(agent, "id", "") in ["agent-samruddhi-agritech", "agent-samruddhi-agri-hindi"]) or ("samruddhi" in (getattr(agent, "name", "")).lower()) or ("कृषि" in getattr(agent, "name", "")) or ("agri" in (getattr(agent, "name", "")).lower())
 
             direct_reply = None
             should_terminate_after_reply = False
@@ -1191,25 +1196,44 @@ class SarvamTelephonyService:
                 else:
                     direct_reply = "शरबती गेहूँ खाने में स्वादिष्ट और मुलायम रोटियों के लिए जाना जाता है, मंडी में बढ़िया भाव मिलता है!"
 
-            # Deterministic Turn Progression for Samruddhi Agritech Agent
-            elif is_agri_agent and "mr" in lang_code:
-                if dialogue_step == 0:
-                    dialogue_step = 1
-                    direct_reply = "खूप छान! आपण बियाणे आता खरेदी करू इच्छिता की नंतर?"
-                elif dialogue_step == 1:
-                    dialogue_step = 2
-                    direct_reply = "काही हरकत नाही! आपण किती एकर जमिनीवर पेरणी करण्याचे ठरवले आहे?"
-                elif dialogue_step == 2:
-                    dialogue_step = 3
-                    prefix = f"{context_state['acreage']} साठी खूप छान! " if context_state['acreage'] else "काही हरकत नाही! "
-                    direct_reply = f"{prefix}साधारण किती किलो बियाणे हवे आहे किंवा दर जाणून घ्यायचे आहेत का?"
-                elif dialogue_step == 3:
-                    dialogue_step = 4
-                    direct_reply = "आमच्याकडे लोकवन गहू ४२ रुपये किलो आणि दिग्विजय हरभरा ७८ रुपये किलो आहे. बुकिंगसाठी आमच्या प्रतिनिधीकडून कॉल हवा आहे का?"
-                elif dialogue_step >= 4:
-                    dialogue_step = 5
-                    direct_reply = "नक्कीच! समृद्धी ॲग्रीटेक मध्ये संपर्क केल्याबद्दल खूप धन्यवाद, आपला दिवस शुभ जावो, नमस्कार!"
-                    should_terminate_after_reply = True
+            # Deterministic Turn Progression for Samruddhi Agritech Agent (Marathi & Hindi)
+            elif is_agri_agent:
+                if "mr" in lang_code:
+                    if dialogue_step == 0:
+                        dialogue_step = 1
+                        direct_reply = "खूप छान! आपण बियाणे आता खरेदी करू इच्छिता की नंतर?"
+                    elif dialogue_step == 1:
+                        dialogue_step = 2
+                        direct_reply = "काही हरकत नाही! आपण किती एकर जमिनीवर पेरणी करण्याचे ठरवले आहे?"
+                    elif dialogue_step == 2:
+                        dialogue_step = 3
+                        prefix = f"{context_state['acreage']} साठी खूप छान! " if context_state['acreage'] else "काही हरकत नाही! "
+                        direct_reply = f"{prefix}साधारण किती किलो बियाणे हवे आहे किंवा दर जाणून घ्यायचे आहेत का?"
+                    elif dialogue_step == 3:
+                        dialogue_step = 4
+                        direct_reply = "आमच्याकडे लोकवन गहू ४२ रुपये किलो आणि दिग्विजय हरभरा ७८ रुपये किलो आहे. बुकिंगसाठी आमच्या प्रतिनिधीकडून कॉल हवा आहे का?"
+                    elif dialogue_step >= 4:
+                        dialogue_step = 5
+                        direct_reply = "नक्कीच! समृद्धी ॲग्रीटेक मध्ये संपर्क केल्याबद्दल खूप धन्यवाद, आपला दिवस शुभ जावो, नमस्कार!"
+                        should_terminate_after_reply = True
+                else:  # Hindi Agri Agent progression
+                    if dialogue_step == 0:
+                        dialogue_step = 1
+                        direct_reply = "बहुत बढ़िया किसान भाई! आप बीज अभी खरीदना चाहते हैं या कुछ दिन बाद?"
+                    elif dialogue_step == 1:
+                        dialogue_step = 2
+                        direct_reply = "जी ठीक है! आप लगभग कितने एकड़ जमीन में बुवाई करने की योजना बना रहे हैं?"
+                    elif dialogue_step == 2:
+                        dialogue_step = 3
+                        prefix = f"{context_state['acreage']} के लिए बहुत बढ़िया! " if context_state['acreage'] else "जी बिल्कुल! "
+                        direct_reply = f"{prefix}लगभग कितने किलो बीज चाहिए या भाव जानना चाहेंगे?"
+                    elif dialogue_step == 3:
+                        dialogue_step = 4
+                        direct_reply = "हमारे पास प्रमाणित लोकवन गेहूँ ४२ रुपये किलो और दिग्विजय चना ७८ रुपये किलो है। क्या बुकिंग के लिए हमारी टीम आपको कॉल करे?"
+                    elif dialogue_step >= 4:
+                        dialogue_step = 5
+                        direct_reply = "बिल्कुल! समृद्धि एग्रीटेक से संपर्क करने के लिए बहुत धन्यवाद, आपका दिन शुभ हो, राम-राम!"
+                        should_terminate_after_reply = True
 
             if direct_reply:
                 full_reply = direct_reply
@@ -1434,6 +1458,13 @@ class SarvamTelephonyService:
                             # Require at least 200ms (1600 bytes) of genuine speech to prevent triggering on background clicks
                             if len(user_audio) < 1600:
                                 continue
+
+                            # Cancel previous in-flight turn if still processing, to prevent overlapping/dual replies
+                            if current_turn_task and not current_turn_task.done():
+                                logger.info("[SarvamTelephony] Cancelling previous unfinished response task to prevent overlapping replies.")
+                                current_turn_task.cancel()
+                                if is_agent_speaking and stream_id:
+                                    await self.stop_playback_and_clear(websocket, stream_id)
 
                             # Launch turn processing task asynchronously
                             current_turn_task = asyncio.create_task(

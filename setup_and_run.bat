@@ -289,7 +289,7 @@ python scripts\tunnel_helper.py 8001 >nul 2>&1
 :: 7.2 Launch FastAPI Backend
 echo  - Launching FastAPI Backend (Port 8001)...
 cd /d "%BASE_DIR%\backend"
-start "ARB SoftTech Backend (Port 8001)" cmd /k "title ARB SoftTech Backend Server && .\.venv\Scripts\activate.bat && python -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload --reload-dir app --reload-exclude *.env --reload-exclude *.db"
+start "ARB SoftTech Backend (Port 8001)" cmd /k "title ARB SoftTech Backend Server && .\.venv\Scripts\activate.bat && python -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload --reload-dir app"
 
 :: 7.3 Launch React Frontend
 echo  - Launching React Frontend (Port 5173)...

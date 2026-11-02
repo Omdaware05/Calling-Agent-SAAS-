@@ -83,7 +83,7 @@ if exist "%BASE_DIR%\data\logs\tunnel_url.txt" (
 echo.
 echo [2/3] Launching FastAPI Backend on Port 8001...
 cd /d "%BASE_DIR%\backend"
-start "ARB SoftTech Backend (Port 8001)" cmd /k "title ARB SoftTech Backend Server && .\.venv\Scripts\activate.bat && python -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload --reload-dir app --reload-exclude *.env --reload-exclude *.db"
+start "ARB SoftTech Backend (Port 8001)" cmd /k "title ARB SoftTech Backend Server && .\.venv\Scripts\activate.bat && python -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload --reload-dir app"
 echo [OK] Backend server launched in a new window.
 
 :: 3. Launch React Frontend
