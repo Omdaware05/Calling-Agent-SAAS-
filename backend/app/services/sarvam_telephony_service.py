@@ -1384,6 +1384,25 @@ class SarvamTelephonyService:
                     direct_reply = f"जी बहुत धन्यवाद {name_str}, आपका दिन शुभ हो, नमस्कार!"
                     should_terminate_after_reply = True
 
+            # Questionnaire Script Engine: for agents with an assigned
+            # questionnaire, resolve the turn deterministically (the same
+            # engine the local AI server uses) before falling back to the
+            # LLM — scripted order, verbatim Q&A answers, and unknown caller
+            # questions get the fixed no-information line, never an
+            # invented answer.
+            if not direct_reply and "MANDATORY QUESTIONNAIRE SCRIPT" in (system_prompt or ""):
+                try:
+                    from app.services.questionnaire_runtime_service import FastQuestionnaireOrchestrator
+                    q_messages = [{"role": "system", "content": system_prompt}] + conversation_history
+                    q_reply, q_terminal = FastQuestionnaireOrchestrator.resolve_next_turn_detailed(q_messages)
+                    if q_reply:
+                        direct_reply = q_reply
+                        if q_terminal:
+                            should_terminate_after_reply = True
+                        logger.info(f"[SarvamTelephony] Questionnaire Engine resolved: '{direct_reply}'")
+                except Exception as q_err:
+                    logger.warning(f"[SarvamTelephony] Questionnaire Engine notice: {q_err}")
+
             if direct_reply:
                 full_reply = direct_reply
                 logger.info(f"[SarvamTelephony] Dialogue Engine resolved: step={dialogue_step}, reply='{full_reply}'")
