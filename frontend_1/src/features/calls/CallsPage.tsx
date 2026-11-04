@@ -20,7 +20,7 @@ import { formatDateTime } from '../../utils/dateUtils';
 export const CallsPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const urlAgentId = searchParams.get('agent_id') || '';
-  const { selectedBusiness, isAllBusinesses } = useBusiness();
+  const { selectedBusiness, selectedBusinessId, isAllBusinesses } = useBusiness();
 
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
   const [stateFilter, setStateFilter] = useState<string>('ALL');
@@ -34,7 +34,7 @@ export const CallsPage: React.FC = () => {
   }, [urlAgentId]);
 
   const { data: agents = [] } = useQuery({
-    queryKey: ['agents'],
+    queryKey: ['agents', selectedBusinessId],
     queryFn: () => agentsApi.getAgents(50),
   });
 
@@ -45,7 +45,7 @@ export const CallsPage: React.FC = () => {
   }, [agents, selectedBusiness, isAllBusinesses]);
 
   const { data: calls = [], isLoading, refetch } = useQuery({
-    queryKey: ['calls', stateFilter, agentFilter],
+    queryKey: ['calls', stateFilter, agentFilter, selectedBusinessId],
     queryFn: () =>
       callsApi.getCalls({
         state: stateFilter === 'ALL' ? undefined : stateFilter,

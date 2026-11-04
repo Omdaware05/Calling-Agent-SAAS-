@@ -47,7 +47,7 @@ const STATUS_TABS = [
 export const LeadsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const { selectedBusiness, isAllBusinesses, getBusinessForAgent } = useBusiness();
+  const { selectedBusiness, selectedBusinessId, isAllBusinesses, getBusinessForAgent } = useBusiness();
 
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
   const [editingLead, setEditingLead] = useState<LeadDocument | null>(null);
@@ -58,7 +58,7 @@ export const LeadsPage: React.FC = () => {
   const [isDownloading, setIsDownloading] = useState(false);
 
   const { data: leads = [], isLoading, refetch } = useQuery({
-    queryKey: ['leads'],
+    queryKey: ['leads', selectedBusinessId],
     queryFn: () => leadsApi.getLeads(),
     refetchInterval: 3000,
   });
@@ -122,17 +122,18 @@ export const LeadsPage: React.FC = () => {
       const reasonsText = (items?: { reason: string; evidence?: string }[]) =>
         (items || []).map((r) => `${r.reason} — "${r.evidence || ''}"`).join('; ');
       return {
-        'Lead ID': l.lead_id,
-        'Customer Name': l.name || ci.name || 'N/A',
+        'Customer Name': l.name || (l.metadata as any)?.customer_name || ci.name || 'Unknown Prospect',
         'Prospect Phone': l.phone_number,
+        'Pipeline Status': (l.status || 'new').toUpperCase(),
+        'What Customer Said': (l.metadata as any)?.what_they_said || l.reasoning || l.notes || 'N/A',
+        'When to Call Again (Preferred Callback)': (l.metadata as any)?.preferred_callback_time || 'N/A',
+        'Service Interested': (l.metadata as any)?.service_interested || ci.product_interest || 'N/A',
+        'Confidence Score': `${Math.round(((l.confidence_score !== undefined && l.confidence_score !== null) ? l.confidence_score : ((l as any).score ?? 0)) * 100)}%`,
         'Email': l.email || ci.email || 'N/A',
         'City': ci.city || 'N/A',
         'Budget (INR)': ci.budget_inr ?? 'N/A',
-        'Pipeline Status': l.status || 'new',
-        'Confidence Score': `${Math.round(((l.confidence_score !== undefined && l.confidence_score !== null) ? l.confidence_score : ((l as any).score ?? 0)) * 100)}%`,
         'Why Interested': reasonsText(l.metadata?.why_interested) || 'N/A',
         'Why Not Interested': reasonsText(l.metadata?.why_not_interested) || 'N/A',
-        'Reasoning': l.reasoning || l.notes || 'N/A',
         'Call ID': l.call_id || 'N/A',
         'Agent ID': l.agent_id || 'N/A',
         'Captured At': formatDateTime(l.created_at, 'yyyy-MM-dd HH:mm:ss'),
@@ -145,7 +146,10 @@ export const LeadsPage: React.FC = () => {
   const handleDownloadServerExcel = async () => {
     setIsDownloading(true);
     try {
-      await leadsApi.downloadLeadsExcel(statusFilter !== 'all' ? statusFilter : undefined);
+      await leadsApi.downloadLeadsExcel(
+        statusFilter !== 'all' ? statusFilter : undefined,
+        isAllBusinesses ? undefined : selectedBusinessId
+      );
       toast.success('Excel Downloaded', `Leads workbook (${statusFilter === 'all' ? 'all statuses' : statusFilter}) saved.`);
     } catch (err) {
       toast.error('Excel download failed', getErrorMessage(err));

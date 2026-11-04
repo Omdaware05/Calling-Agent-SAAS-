@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import verify_app_client
+from app.dependencies import resolve_tenant_id, verify_app_client
 from app.schemas.contact import ContactResponse, CreateContactRequest, CsvImportResponse
 from app.services.contact_service import contact_service
 
@@ -16,8 +16,7 @@ router = APIRouter(prefix="/contacts", tags=["contacts"], dependencies=[Depends(
 @router.get("", response_model=List[ContactResponse])
 async def list_contacts(
     agent_id: Optional[str] = None,
-    tenant_id: Optional[str] = None,
-    business_id: Optional[str] = None,
+    tenant_id: Optional[str] = Depends(resolve_tenant_id),
     limit: int = Query(50, ge=1, le=500),
     skip: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -25,7 +24,7 @@ async def list_contacts(
     """
     List persisted contacts with optional agent or business filtering.
     """
-    t_id = tenant_id or business_id
+    t_id = tenant_id
     return await contact_service.list_contacts(db, agent_id=agent_id, tenant_id=t_id, limit=limit, skip=skip)
 
 

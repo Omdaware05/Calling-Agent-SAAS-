@@ -17,10 +17,10 @@ export const ModernAgents: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AgentDocument | null>(null);
 
-  const { selectedBusiness, isAllBusinesses } = useBusiness();
-  const { data: agents = [], isLoading } = useQuery({ queryKey: ['agents'], queryFn: () => agentsApi.getAgents(50) });
+  const { selectedBusiness, selectedBusinessId, isAllBusinesses } = useBusiness();
+  const { data: agents = [], isLoading } = useQuery({ queryKey: ['agents', selectedBusinessId], queryFn: () => agentsApi.getAgents(50) });
   const { data: calls = [] } = useQuery<CallDocument[]>({
-    queryKey: ['modern-calls'],
+    queryKey: ['modern-calls', selectedBusinessId],
     queryFn: () => callsApi.getCalls({ limit: 200 }),
   });
 

@@ -23,17 +23,24 @@ const FILTERS = [
 const LIVE_STATES = ['QUEUED', 'DIALING', 'RINGING', 'CONNECTED', 'LISTENING', 'THINKING', 'SPEAKING'];
 
 export const ModernCalls: React.FC = () => {
-  const { selectedBusiness, isAllBusinesses } = useBusiness();
+  const { selectedBusiness, selectedBusinessId, isAllBusinesses } = useBusiness();
   const [filter, setFilter] = useState<string>('all');
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
 
-  const { data: stats } = useQuery({ queryKey: ['global-stats'], queryFn: statsApi.getStats, refetchInterval: 15000 });
+  const { data: stats } = useQuery({
+    queryKey: ['global-stats', selectedBusinessId],
+    queryFn: () => statsApi.getStats(isAllBusinesses ? undefined : selectedBusinessId),
+    refetchInterval: 15000,
+  });
   const { data: calls = [], isLoading } = useQuery<CallDocument[]>({
-    queryKey: ['modern-calls'],
+    queryKey: ['modern-calls', selectedBusinessId],
     queryFn: () => callsApi.getCalls({ limit: 200 }),
     refetchInterval: 15000,
   });
-  const { data: agents = [] } = useQuery({ queryKey: ['agents'], queryFn: () => agentsApi.getAgents(50) });
+  const { data: agents = [] } = useQuery({
+    queryKey: ['agents', selectedBusinessId],
+    queryFn: () => agentsApi.getAgents(50),
+  });
 
   // Scope calls to selected business
   const scopedCalls = useMemo(() => {
@@ -59,11 +66,16 @@ export const ModernCalls: React.FC = () => {
     return sorted.filter((c) => c.state === filter);
   }, [scopedCalls, filter]);
 
+  const totalCallsCount = isAllBusinesses ? (stats?.total_calls ?? scopedCalls.length) : scopedCalls.length;
+  const liveCallsCount = isAllBusinesses ? (stats?.active ?? 0) : scopedCalls.filter((c) => LIVE_STATES.includes(c.state)).length;
+  const completedCallsCount = isAllBusinesses ? (stats?.completed ?? 0) : scopedCalls.filter((c) => c.state === 'COMPLETED').length;
+  const failedCallsCount = isAllBusinesses ? (stats?.failed ?? 0) : scopedCalls.filter((c) => ['FAILED', 'BUSY', 'NO_ANSWER'].includes(c.state)).length;
+
   const statCards = [
-    { label: 'Total Calls', value: (stats?.total_calls ?? scopedCalls.length).toLocaleString('en-IN'), icon: PhoneCall, iconClass: 'bg-[#FFF1E6] text-[#EA580C]', subtext: 'across all agents' },
-    { label: 'Live Now', value: (stats?.active ?? 0).toLocaleString('en-IN'), icon: Radio, iconClass: 'bg-[#E7F8EE] text-[#16A34A]', subtext: 'calls in progress' },
-    { label: 'Completed', value: (stats?.completed ?? 0).toLocaleString('en-IN'), icon: PhoneOutgoing, iconClass: 'bg-[#E6F4FE] text-[#0284C7]', subtext: stats?.total_calls ? `${Math.round(((stats?.completed ?? 0) / stats.total_calls) * 100)}% of all calls` : '' },
-    { label: 'Failed', value: (stats?.failed ?? 0).toLocaleString('en-IN'), icon: PhoneMissed, iconClass: 'bg-[#FDECEC] text-[#DC2626]', subtext: 'could not connect' },
+    { label: 'Total Calls', value: totalCallsCount.toLocaleString('en-IN'), icon: PhoneCall, iconClass: 'bg-[#FFF1E6] text-[#EA580C]', subtext: isAllBusinesses ? 'across all clients' : 'for this business' },
+    { label: 'Live Now', value: liveCallsCount.toLocaleString('en-IN'), icon: Radio, iconClass: 'bg-[#E7F8EE] text-[#16A34A]', subtext: 'calls in progress' },
+    { label: 'Completed', value: completedCallsCount.toLocaleString('en-IN'), icon: PhoneOutgoing, iconClass: 'bg-[#E6F4FE] text-[#0284C7]', subtext: totalCallsCount ? `${Math.round((completedCallsCount / totalCallsCount) * 100)}% of all calls` : '' },
+    { label: 'Failed', value: failedCallsCount.toLocaleString('en-IN'), icon: PhoneMissed, iconClass: 'bg-[#FDECEC] text-[#DC2626]', subtext: 'could not connect' },
   ];
 
   return (

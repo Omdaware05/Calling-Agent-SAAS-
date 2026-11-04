@@ -2,13 +2,19 @@ import apiClient from './client';
 import { StatsResponse, ActiveCallsResponse, QueueResponse, ProviderBreakdownResponse } from '../../types/api';
 
 export const statsApi = {
-  getStats: async (): Promise<StatsResponse> => {
-    const res = await apiClient.get<StatsResponse>('/stats');
+  getStats: async (params?: any): Promise<StatsResponse> => {
+    const tenantId = typeof params === 'string' ? params : (params?.tenant_id || undefined);
+    const res = await apiClient.get<StatsResponse>('/stats', {
+      params: tenantId && tenantId !== 'all' ? { tenant_id: tenantId } : undefined,
+    });
     return res.data;
   },
 
-  getActiveCalls: async (): Promise<ActiveCallsResponse> => {
-    const res = await apiClient.get<ActiveCallsResponse>('/active-calls');
+  getActiveCalls: async (params?: any): Promise<ActiveCallsResponse> => {
+    const tenantId = typeof params === 'string' ? params : (params?.tenant_id || undefined);
+    const res = await apiClient.get<ActiveCallsResponse>('/active-calls', {
+      params: tenantId && tenantId !== 'all' ? { tenant_id: tenantId } : undefined,
+    });
     return res.data;
   },
 
@@ -17,8 +23,11 @@ export const statsApi = {
     return res.data;
   },
 
-  getProviderBreakdown: async (): Promise<ProviderBreakdownResponse> => {
-    const res = await apiClient.get<ProviderBreakdownResponse>('/stats/providers');
+  getProviderBreakdown: async (params?: any): Promise<ProviderBreakdownResponse> => {
+    const tenantId = typeof params === 'string' ? params : (params?.tenant_id || undefined);
+    const res = await apiClient.get<ProviderBreakdownResponse>('/stats/providers', {
+      params: tenantId && tenantId !== 'all' ? { tenant_id: tenantId } : undefined,
+    });
     return res.data;
   },
 };

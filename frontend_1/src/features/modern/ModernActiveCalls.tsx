@@ -10,7 +10,7 @@ export const ModernActiveCalls: React.FC = () => {
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['active-calls'],
-    queryFn: statsApi.getActiveCalls,
+    queryFn: () => statsApi.getActiveCalls(),
     refetchInterval: 5000,
   });
   const { data: agents = [] } = useQuery({ queryKey: ['agents'], queryFn: () => agentsApi.getAgents(50) });

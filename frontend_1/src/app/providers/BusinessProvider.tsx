@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { businessesApi } from '../../services/api/businesses';
 
 export interface Business {
@@ -35,6 +36,7 @@ const STORAGE_KEY_SELECTED = 'voxora_active_business_id_v1';
 const BusinessContext = createContext<BusinessContextType | undefined>(undefined);
 
 export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const queryClient = useQueryClient();
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>(() => {
@@ -93,6 +95,13 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const selectBusiness = (id: string) => {
     setSelectedBusinessId(id);
+    try {
+      localStorage.setItem(STORAGE_KEY_SELECTED, id);
+    } catch {
+      // ignore
+    }
+    // Instantly invalidate all queries so all pages refetch data for the new business
+    queryClient.invalidateQueries();
   };
 
   const addBusiness = async (data: Omit<Business, 'id' | 'createdAt'>): Promise<Business> => {
@@ -114,6 +123,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         createdAt: doc.created_at,
       };
       setBusinesses((prev) => [newBiz, ...prev]);
+      queryClient.invalidateQueries();
       return newBiz;
     } catch (err) {
       console.warn('[BusinessProvider] Backend create error, falling back locally:', err);
@@ -124,6 +134,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         createdAt: new Date().toISOString(),
       };
       setBusinesses((prev) => [newBiz, ...prev]);
+      queryClient.invalidateQueries();
       return newBiz;
     }
   };
@@ -140,6 +151,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         phone: updates.contactPhone,
         is_active: updates.status === 'active',
       });
+      queryClient.invalidateQueries();
     } catch (err) {
       console.warn('[BusinessProvider] Backend update error:', err);
     }
@@ -152,6 +164,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
     try {
       await businessesApi.delete(id);
+      queryClient.invalidateQueries();
     } catch (err) {
       console.warn('[BusinessProvider] Backend delete error:', err);
     }
@@ -170,6 +183,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     );
     try {
       await businessesApi.assignAgent(businessId, agentId);
+      queryClient.invalidateQueries();
     } catch (err) {
       console.warn('[BusinessProvider] Backend assign error:', err);
     }
@@ -189,6 +203,7 @@ export const BusinessProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     );
     try {
       await businessesApi.unassignAgent(businessId, agentId);
+      queryClient.invalidateQueries();
     } catch (err) {
       console.warn('[BusinessProvider] Backend unassign error:', err);
     }

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import verify_app_client
+from app.dependencies import resolve_tenant_id, verify_app_client
 from app.schemas.campaign import CampaignResponse, CreateCampaignRequest
 from app.services.campaign_service import campaign_service
 
@@ -16,14 +16,13 @@ router = APIRouter(prefix="/campaigns", tags=["campaigns"], dependencies=[Depend
 @router.get("", response_model=List[CampaignResponse])
 async def list_campaigns(
     agent_id: Optional[str] = None,
-    tenant_id: Optional[str] = None,
-    business_id: Optional[str] = None,
+    tenant_id: Optional[str] = Depends(resolve_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
     """
     List all campaigns with optional agent or business filtering.
     """
-    t_id = tenant_id or business_id
+    t_id = tenant_id
     return await campaign_service.list_campaigns(db, agent_id=agent_id, tenant_id=t_id)
 
 

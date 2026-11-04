@@ -2,9 +2,7 @@ import apiClient from './client';
 import { LeadDocument } from '../../types/api';
 
 export const leadsApi = {
-  getLeads: async (params?: { agent_id?: string; limit?: number; skip?: number }): Promise<LeadDocument[]> => {
-    // Default to the backend maximum page size so leads beyond the old
-    // default of 50 are not silently invisible (and missing from exports).
+  getLeads: async (params?: { agent_id?: string; tenant_id?: string; business_id?: string; limit?: number; skip?: number }): Promise<LeadDocument[]> => {
     const res = await apiClient.get<any>('/leads', { params: { limit: 500, ...params } });
     if (Array.isArray(res.data)) return res.data;
     if (res.data && Array.isArray(res.data.leads)) return res.data.leads;
@@ -13,12 +11,15 @@ export const leadsApi = {
 
   /**
    * Download the server-generated Excel workbook of leads
-   * (GET /leads/export.xlsx), optionally filtered by status,
-   * e.g. 'interested' or 'not_interested'.
+   * (GET /leads/export.xlsx), optionally filtered by status and tenant/business.
    */
-  downloadLeadsExcel: async (status?: string): Promise<void> => {
+  downloadLeadsExcel: async (status?: string, tenantId?: string): Promise<void> => {
+    const params: Record<string, string> = {};
+    if (status) params.status = status;
+    if (tenantId && tenantId !== 'all') params.tenant_id = tenantId;
+
     const res = await apiClient.get('/leads/export.xlsx', {
-      params: status ? { status } : {},
+      params,
       responseType: 'blob',
     });
     const url = URL.createObjectURL(res.data as Blob);
@@ -28,8 +29,6 @@ export const leadsApi = {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    // Delay revoking: an immediate revoke can cancel the download in
-    // some browsers (observed as a 0-byte file in Firefox).
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   },
 

@@ -5,7 +5,7 @@ import { StatsResponse, QueueResponse } from '../types/api';
 export function useRealTimeStats(enabled = true) {
   const statsQuery = useQuery<StatsResponse>({
     queryKey: ['stats'],
-    queryFn: statsApi.getStats,
+    queryFn: () => statsApi.getStats(),
     refetchInterval: enabled ? 1500 : false,
     staleTime: 1000,
     retry: 2,

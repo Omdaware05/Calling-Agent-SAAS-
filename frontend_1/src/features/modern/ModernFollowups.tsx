@@ -23,10 +23,10 @@ function dayBucket(iso: string): 'overdue' | 'today' | 'upcoming' {
 export const ModernFollowups: React.FC = () => {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const { selectedBusiness, isAllBusinesses } = useBusiness();
+  const { selectedBusiness, selectedBusinessId, isAllBusinesses } = useBusiness();
 
   const { data: followups = [], isLoading } = useQuery<FollowupDocument[]>({
-    queryKey: ['followups'],
+    queryKey: ['followups', selectedBusinessId],
     queryFn: () => followupsApi.getFollowups({ limit: 200 }),
     refetchInterval: 5000,
   });

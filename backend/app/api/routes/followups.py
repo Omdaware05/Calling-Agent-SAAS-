@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import verify_app_client
+from app.dependencies import resolve_tenant_id, verify_app_client
 from app.models.lead import Followup
 from app.models.call import Call, Transcript, TranscriptSegment
 from app.models.agent import Agent
@@ -125,7 +125,7 @@ async def list_followups(
     phone calls. The sync now runs in the dispatcher's per-minute
     housekeeping instead; this endpoint only reads.
     """
-    t_id = tenant_id or business_id
+    t_id = tenant_id
     stmt = select(Followup).order_by(Followup.created_at.desc())
     if agent_id:
         stmt = stmt.where(Followup.agent_id == agent_id)

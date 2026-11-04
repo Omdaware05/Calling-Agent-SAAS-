@@ -205,6 +205,10 @@ Return ONLY a valid JSON object with these exact keys:
   "confidence": float,
   "reasoning": string,
   "rule_applied": string,
+  "customer_name": "string or null (customer's name if mentioned or asked)",
+  "what_they_said": "string (1-2 sentence key quote / summary of customer's needs and statements)",
+  "preferred_callback_time": "string or null (exact day/time customer asked to be called back, e.g. 'Tomorrow at 4 PM' or 'कल शाम 5 बजे')",
+  "service_interested": "string or null (product or service of interest, e.g. 'AI Calling Agent' or 'Customer Support Automation')",
   "signals": list of strings,
   "languages": list of strings,
   "opt_out_detected": boolean,
@@ -351,6 +355,15 @@ Return ONLY a valid JSON object with these exact keys:
             signals = gemini_result.get("signals", [])
             languages = gemini_result.get("languages", ["Hindi"])
 
+            extracted_name = gemini_result.get("customer_name") or customer_info.get("name")
+            what_they_said = gemini_result.get("what_they_said") or ""
+            preferred_callback_time = gemini_result.get("preferred_callback_time") or ""
+            service_interested = gemini_result.get("service_interested") or customer_info.get("product_interest") or ""
+            if extracted_name and not customer_info.get("name"):
+                customer_info["name"] = extracted_name
+            if service_interested and not customer_info.get("product_interest"):
+                customer_info["product_interest"] = service_interested
+
             # First-question YES policy: Customer confirmed interest at Question 1.
             # Client Rule: Always add to interested leads even if later in conversation they said no.
             if first_q_yes:
@@ -420,6 +433,10 @@ Return ONLY a valid JSON object with these exact keys:
                     "analyzer": "gemini",
                     "first_question_yes": first_q_yes,
                     "customer_info": customer_info,
+                    "customer_name": extracted_name,
+                    "what_they_said": what_they_said,
+                    "preferred_callback_time": preferred_callback_time,
+                    "service_interested": service_interested,
                     "why_interested": why_interested,
                     "why_not_interested": why_not_interested,
                 }
@@ -541,12 +558,12 @@ Return ONLY a valid JSON object with these exact keys:
                     diag.classification in (IntentClassification.INTERESTED, IntentClassification.NEEDS_INFORMATION)
                     or diag.binary_classification == "INTERESTED"
                 )
+                confidence = float(diag.confidence) if getattr(diag, "confidence", None) is not None else 0.85
                 # First-question YES policy or Duration Policy (>1 min)
                 if first_q_yes or duration_interested:
                     is_interested = True
                     diag.opt_out_detected = False
                     confidence = max(confidence, 0.95 if first_q_yes else 0.92)
-                confidence = float(diag.confidence)
 
                 # Determine disposition and handle opt-out suppression
                 if diag.opt_out_detected:

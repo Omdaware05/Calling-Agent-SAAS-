@@ -21,7 +21,7 @@ import { formatDateTime, toLocalDatetimeInput, isFollowupDue } from '../../utils
 export const FollowupsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const { selectedBusiness, isAllBusinesses } = useBusiness();
+  const { selectedBusiness, selectedBusinessId, isAllBusinesses } = useBusiness();
 
   const [editingFollowup, setEditingFollowup] = useState<FollowupDocument | null>(null);
   const [status, setStatus] = useState<FollowupStatus>('scheduled');
@@ -30,7 +30,7 @@ export const FollowupsPage: React.FC = () => {
   const [timeRange, setTimeRange] = useState<TimeFilterRange>('all');
 
   const { data: followups = [], isLoading, refetch } = useQuery({
-    queryKey: ['followups'],
+    queryKey: ['followups', selectedBusinessId],
     queryFn: () => followupsApi.getFollowups(),
     refetchInterval: 3000,
   });

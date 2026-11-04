@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database import get_db
-from app.dependencies import verify_app_client
+from app.dependencies import resolve_tenant_id, verify_app_client
 from app.models.call import Call
 from app.services.call_service import normalize_dograh_status, persist_post_call_artifacts, TERMINAL_STATES
 from app.services.dograh_service import dograh_service
@@ -21,12 +21,22 @@ router = APIRouter(tags=["stats"], dependencies=[Depends(verify_app_client)])
 
 
 @router.get("/stats")
-async def get_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
+async def get_stats(
+    tenant_id: Optional[str] = Depends(resolve_tenant_id),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
     """
     Get aggregated call telemetry metrics for dashboard.
+    Optionally filtered by tenant_id / business_id.
     """
-    # Count calls by status
-    stmt = select(Call.status, func.count(Call.id)).group_by(Call.status)
+    stmt = select(Call.status, func.count(Call.id))
+    dur_stmt = select(func.avg(Call.duration)).where(Call.duration.isnot(None))
+
+    if tenant_id:
+        stmt = stmt.where(Call.tenant_id == tenant_id)
+        dur_stmt = dur_stmt.where(Call.tenant_id == tenant_id)
+
+    stmt = stmt.group_by(Call.status)
     res = await db.execute(stmt)
     counts = dict(res.all())
 
@@ -38,8 +48,6 @@ async def get_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
     busy = counts.get("busy", 0)
     no_answer = counts.get("no_answer", 0)
 
-    # Average duration
-    dur_stmt = select(func.avg(Call.duration)).where(Call.duration.isnot(None))
     dur_res = await db.execute(dur_stmt)
     avg_dur = dur_res.scalar() or 0.0
 
@@ -58,13 +66,16 @@ async def get_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
         "busy": busy,
         "no_answer": no_answer,
         "average_duration_seconds": round(float(avg_dur), 1),
-        "vobiz": prov_counts.get("vobiz", {"total": 0, "completed": 0, "failed": 0}),
+        "vobiz": prov_counts.get("vobiz", {"total": total, "completed": completed, "failed": failed + busy + no_answer}),
         "twilio": prov_counts.get("twilio", {"total": 0, "completed": 0, "failed": 0}),
     }
 
 
 @router.get("/active-calls")
-async def get_active_calls(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
+async def get_active_calls(
+    tenant_id: Optional[str] = Depends(resolve_tenant_id),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
     """
     List currently live / in-flight voice calls.
     Immediately syncs live calls with Dograh so as soon as callee hangs up,
@@ -74,8 +85,11 @@ async def get_active_calls(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]
         select(Call)
         .options(selectinload(Call.agent))
         .where(Call.status.in_(["initiating", "ringing", "in_progress"]))
-        .order_by(Call.created_at.desc())
     )
+    if tenant_id:
+        stmt = stmt.where(Call.tenant_id == tenant_id)
+
+    stmt = stmt.order_by(Call.created_at.desc())
     res = await db.execute(stmt)
     calls = list(res.scalars().all())
 
@@ -190,13 +204,21 @@ async def get_queue(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
 
 
 @router.get("/stats/providers")
-async def get_provider_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
+async def get_provider_stats(
+    tenant_id: Optional[str] = Depends(resolve_tenant_id),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
     """
     Provider breakdown calculated dynamically from real database records.
     """
     total_stmt = select(func.count(Call.id))
     completed_stmt = select(func.count(Call.id)).where(Call.status == "completed")
     failed_stmt = select(func.count(Call.id)).where(Call.status.in_(["failed", "busy", "no_answer"]))
+
+    if tenant_id:
+        total_stmt = total_stmt.where(Call.tenant_id == tenant_id)
+        completed_stmt = completed_stmt.where(Call.tenant_id == tenant_id)
+        failed_stmt = failed_stmt.where(Call.tenant_id == tenant_id)
 
     total = (await db.execute(total_stmt)).scalar() or 0
     completed = (await db.execute(completed_stmt)).scalar() or 0

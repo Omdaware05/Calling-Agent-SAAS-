@@ -9,7 +9,7 @@ import struct
 import time
 import uuid
 import wave
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
 import httpx
@@ -20,6 +20,8 @@ from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.agent import Agent
 from app.models.call import Call, Recording, Transcript, TranscriptSegment
+from app.models.contact import Contact
+from app.models.lead import Lead
 from app.services.storage.s3 import storage_service
 from app.utils.datetime_utils import ensure_utc
 
@@ -946,7 +948,7 @@ class SarvamTelephonyService:
                 await play_audio_task(greeting_mulaw)
 
         async def process_caller_turn(user_audio_bytes: bytes, t_start: float, t_end: float):
-            nonlocal sequence_counter, is_agent_speaking, agent_finished_speaking_time, greeting_delivered, greeting_started_time
+            nonlocal sequence_counter, is_agent_speaking, agent_finished_speaking_time, greeting_delivered, greeting_started_time, dialogue_step
             t_turn_start = time.time()
             logger.info(f"[SarvamTelephony] Caller finished turn ({len(user_audio_bytes)} bytes). Transcribing...")
             user_text = await self.transcribe_audio(user_audio_bytes)
@@ -1151,6 +1153,7 @@ class SarvamTelephonyService:
             agent_speech_start = time.time()
             prev_agent_texts = [m["content"] for m in conversation_history if m.get("role") == "assistant"]
             is_agri_agent = (getattr(agent, "id", "") in ["agent-samruddhi-agritech", "agent-samruddhi-agri-hindi"]) or ("samruddhi" in (getattr(agent, "name", "")).lower()) or ("कृषि" in getattr(agent, "name", "")) or ("agri" in (getattr(agent, "name", "")).lower())
+            is_sales_agent = (getattr(agent, "id", "") in ["agent-arb-sales-executive", "agent-arb-services-sales"]) or ("sales" in getattr(agent, "name", "").lower()) or ("solutions" in getattr(agent, "name", "").lower()) or ("executive" in getattr(agent, "name", "").lower())
 
             direct_reply = None
             should_terminate_after_reply = False
@@ -1167,30 +1170,41 @@ class SarvamTelephonyService:
                         direct_reply = "हो, ऐकू येतंय! आपल्याला साधारण किती किलो बियाणे हवे आहे किंवा दर जाणून घ्यायचे आहेत का?"
                     else:
                         direct_reply = "हो, ऐकू येतंय! अधिक माहिती आणि बुकिंगसाठी आमच्या प्रतिनिधीकडून कॉल हवा आहे का?"
+                elif is_sales_agent:
+                    cust_name = context_state.get("customer_name") or ""
+                    if dialogue_step <= 1:
+                        direct_reply = "जी, आवाज़ आ रही है! क्या मैं आपका शुभ नाम जान सकता हूँ?"
+                    elif dialogue_step == 2:
+                        name_str = f"{cust_name} जी, " if cust_name else ""
+                        direct_reply = f"जी {name_str}आवाज़ आ रही है! आप हमारी किस सर्विस में रुचि रखते हैं - 1. AI कॉलिंग एजेंट, 2. सपोर्ट ऑटोमेशन, या 3. लीड क्वालिफिकेशन?"
+                    elif dialogue_step == 3:
+                        direct_reply = "जी, आवाज़ आ रही है! क्या हमारा यह ₹4,999 का प्लान आपके लिए सही है?"
+                    else:
+                        direct_reply = "जी, आवाज़ आ रही है! बताएं मैं आपकी क्या सहायता कर सकता हूँ?"
                 else:
                     direct_reply = "जी, आवाज़ आ रही है! बताएं मैं आपकी क्या सहायता कर सकता हूँ?"
 
             # Direct Farmer Q&A: Always answer farmer questions directly with verified facts
-            elif any(q in user_text for q in ["कोणता प्रकार", "कोणती व्हरायटी", "रिकमेंड", "चांगला आहे", "कोणता चांगला", "कोणता ठीक"]):
+            elif is_agri_agent and any(q in user_text for q in ["कोणता प्रकार", "कोणती व्हरायटी", "रिकमेंड", "चांगला आहे", "कोणता चांगला", "कोणता ठीक"]):
                 if "mr" in lang_code:
                     followup = " आपण किती एकर जमिनीवर पेरणी करणार आहात?" if not context_state["acreage"] else " आपण किती किलो बियाणे घेणार आहात?"
                     direct_reply = "उत्पादनासाठी गव्हामध्ये लोकवन आणि हरभऱ्यामध्ये दिग्विजय ही व्हरायटी सर्वोत्तम आहे!" + followup
                 else:
                     direct_reply = "उपज के लिए गेहूँ में लोकवन और चने में दिग्विजय सबसे उत्तम किस्म है! आप कितने एकड़ के लिए सोच रहे हैं?"
 
-            elif any(q in user_text for q in ["दर काय", "भाव काय", "किंमत काय", "काय भाव", "का भाव", "रेट काय", "किंमत"]):
+            elif is_agri_agent and any(q in user_text for q in ["दर काय", "भाव काय", "किंमत काय", "काय भाव", "का भाव", "रेट काय", "किंमत"]):
                 if "mr" in lang_code:
                     direct_reply = "प्रमाणित लोकवन गहू ४२ रुपये किलो आणि हरभरा ७८ रुपये किलो आहे. बुकिंगसाठी आमच्या टीमने आपल्याला कॉल करावा का?"
                 else:
                     direct_reply = "प्रमाणित लोकवन गेहूँ ४२ रुपये किलो और चना ७८ रुपये किलो है। क्या बुकिंग के लिए हमारी टीम आपको कॉल करे?"
 
-            elif "लोकवन" in user_text and any(q in user_text for q in ["माहिती", "सांगा", "बद्दल", "फायदे"]):
+            elif is_agri_agent and "लोकवन" in user_text and any(q in user_text for q in ["माहिती", "सांगा", "बद्दल", "फायदे"]):
                 if "mr" in lang_code:
                     direct_reply = "लोकवन गव्हाची ओंबी मोठी भरते, दाणा टपोरा येतो आणि एकरी १८ ते २० क्विंटल उत्पादन मिळते! बुकिंग करायची आहे का?"
                 else:
                     direct_reply = "लोकवन गेहूँ की बाली बड़ी और दाना चमकदार होता है, प्रति एकड़ १८ से २० क्विंटल पैदावार मिलती है!"
 
-            elif "शरबती" in user_text and any(q in user_text for q in ["माहिती", "सांगा", "बद्दल", "फायदे"]):
+            elif is_agri_agent and "शरबती" in user_text and any(q in user_text for q in ["माहिती", "सांगा", "बद्दल", "फायदे"]):
                 if "mr" in lang_code:
                     direct_reply = "शरबती गहू खाण्यासाठी अत्यंत चवदार व मऊ चपातीसाठी प्रसिद्ध आहे आणि बाजारात चांगला भाव मिळतो!"
                 else:
@@ -1235,6 +1249,141 @@ class SarvamTelephonyService:
                         direct_reply = "बिल्कुल! समृद्धि एग्रीटेक से संपर्क करने के लिए बहुत धन्यवाद, आपका दिन शुभ हो, राम-राम!"
                         should_terminate_after_reply = True
 
+            # Deterministic Turn Progression for ARB Sales & Solutions Agent
+            elif is_sales_agent:
+                cust_name = context_state.get("customer_name") or ""
+                if dialogue_step == 0:
+                    # Q1 response: Did customer say NO or YES?
+                    if self.is_refusal_or_call_termination(user_text) or any(neg in t_clean for neg in ["नहीं", "ना", "no", "not", "busy", "बाद में", "समय नहीं", "कॉल मत", "नॉट"]):
+                        direct_reply = "समय देने के लिए बहुत धन्यवाद, आपका दिन शुभ हो, नमस्कार!"
+                        should_terminate_after_reply = True
+                        dialogue_step = 99
+                    else:
+                        direct_reply = "बहुत अच्छा! आगे की जानकारी के लिए क्या मैं आपका शुभ नाम जान सकता हूँ?"
+                        dialogue_step = 1
+                        try:
+                            async with AsyncSessionLocal() as session:
+                                c = await session.get(Call, call_id)
+                                if c:
+                                    c.disposition = "interested"
+                                    l_stmt = select(Lead).where(Lead.call_id == call_id)
+                                    lead = (await session.execute(l_stmt)).scalar_one_or_none()
+                                    if not lead:
+                                        lead = Lead(
+                                            tenant_id=c.tenant_id,
+                                            agent_id=c.agent_id,
+                                            contact_id=c.contact_id,
+                                            call_id=c.id,
+                                            phone_number=c.phone_number,
+                                            score=0.95,
+                                            reason="Customer confirmed interest at Question 1 (First Question YES Policy)",
+                                            status="interested",
+                                            metadata_json={"first_question_yes": True, "classification": "INTERESTED"}
+                                        )
+                                        session.add(lead)
+                                    else:
+                                        lead.status = "interested"
+                                        lead.score = 0.95
+                                    await session.commit()
+                        except Exception as l_err:
+                            logger.warning(f"[SarvamTelephony] Lead sync notice at Q1: {l_err}")
+
+                elif dialogue_step == 1:
+                    import re as _re
+                    if any(t_clean == w for w in ["हाँ", "हां", "हाँजी", "हा", "yes", "ji", "जी", "हां बताइए", "हाँ बताइए", "बताइए", "बोलिए"]):
+                        direct_reply = "जी, कृपया अपना शुभ नाम बता दीजिए?"
+                    else:
+                        clean_name = _re.sub(r"(मेरा नाम|नाम है|जी|है|iam|my name is|this is|i am)", "", user_text, flags=_re.IGNORECASE).strip("।,?!. ")
+                        if not clean_name:
+                            clean_name = user_text.strip("।,?!. ")
+                        clean_name = clean_name.title() if clean_name.isascii() else clean_name
+                        context_state["customer_name"] = clean_name
+                        cust_name = clean_name
+
+                        try:
+                            async with AsyncSessionLocal() as session:
+                                l_stmt = select(Lead).where(Lead.call_id == call_id)
+                                lead = (await session.execute(l_stmt)).scalar_one_or_none()
+                                if lead:
+                                    lead.name = clean_name
+                                    meta = dict(lead.metadata_json or {})
+                                    meta["customer_name"] = clean_name
+                                    lead.metadata_json = meta
+                                if call.contact_id:
+                                    con = await session.get(Contact, call.contact_id)
+                                    if con and (not con.name or con.name.startswith("Prospect")):
+                                        con.name = clean_name
+                                await session.commit()
+                        except Exception as n_err:
+                            logger.warning(f"[SarvamTelephony] Name sync notice: {n_err}")
+
+                        direct_reply = f"धन्यवाद {clean_name} जी! आप हमारी किस सर्विस में रुचि रखते हैं - 1. AI आउटबाउंड कॉलिंग एजेंट, 2. कस्टमर सपोर्ट ऑटोमेशन, या 3. लीड क्वालिफिकेशन सिस्टम?"
+                        dialogue_step = 2
+
+                elif dialogue_step == 2:
+                    u_lower = user_text.lower().strip()
+                    name_clean_lower = cust_name.lower().strip()
+                    is_name_repeat_or_filler = (
+                        (name_clean_lower and name_clean_lower in u_lower)
+                        or any(u_lower == w for w in ["हाँ", "हां", "हाँजी", "हा", "yes", "ji", "जी", "हेलो", "hello"])
+                    ) and not any(k in u_lower for k in ["कस्टमर", "सपोर्ट", "क्वालिफिकेशन", "लीड", "कॉलिंग", "आउटबाउंड", "calling", "support", "lead", "1", "2", "3", "फेस्टिवल", "सिस्टम"])
+
+                    if is_name_repeat_or_filler:
+                        name_str = f"{cust_name} जी, " if cust_name else "जी, "
+                        direct_reply = f"{name_str}आप हमारी किस सर्विस में रुचि रखते हैं - 1. AI आउटबाउंड कॉलिंग एजेंट, 2. कस्टमर सपोर्ट ऑटोमेशन, या 3. लीड क्वालिफिकेशन सिस्टम?"
+                    else:
+                        chosen_service = "AI Outbound Calling Agent"
+                        if "कस्टमर" in u_lower or "सपोर्ट" in u_lower or "2" in u_lower or "support" in u_lower:
+                            chosen_service = "Customer Support Automation"
+                        elif "क्वालिफिकेशन" in u_lower or "लीड" in u_lower or "3" in u_lower or "lead" in u_lower or "नीट" in u_lower:
+                            chosen_service = "Lead Qualification System"
+                        elif "कॉलिंग" in u_lower or "1" in u_lower or "calling" in u_lower or "outbound" in u_lower:
+                            chosen_service = "AI Outbound Calling Agent"
+                        else:
+                            chosen_service = user_text.strip("।,?!. ")
+
+                        context_state["service"] = chosen_service
+                        try:
+                            async with AsyncSessionLocal() as session:
+                                l_stmt = select(Lead).where(Lead.call_id == call_id)
+                                lead = (await session.execute(l_stmt)).scalar_one_or_none()
+                                if lead:
+                                    meta = dict(lead.metadata_json or {})
+                                    meta["service_interested"] = chosen_service
+                                    lead.metadata_json = meta
+                                    await session.commit()
+                        except Exception as s_err:
+                            logger.warning(f"[SarvamTelephony] Service sync notice: {s_err}")
+
+                        name_str = f"{cust_name} जी, " if cust_name else "जी, "
+                        direct_reply = f"{name_str}हमारी AI कॉलिंग सर्विस का प्लान मात्र ₹4,999 प्रति माह से शुरू होता है, जिसमें अनलिमिटेड स्मार्ट कॉल्स और रियल-टाइम लीड इंटेलिजेंस शामिल है। क्या यह आपके लिए सही है?"
+                        dialogue_step = 3
+
+                elif dialogue_step == 3:
+                    name_str = f"{cust_name} जी" if cust_name else "जी"
+                    direct_reply = f"बहुत-बहुत धन्यवाद {name_str}! हमारी टीम जल्द ही आपसे सेटअप और ऑनबोर्डिंग के लिए संपर्क करेगी। आपका दिन शुभ हो, नमस्कार!"
+                    should_terminate_after_reply = True
+                    dialogue_step = 4
+
+                    try:
+                        async with AsyncSessionLocal() as session:
+                            l_stmt = select(Lead).where(Lead.call_id == call_id)
+                            lead = (await session.execute(l_stmt)).scalar_one_or_none()
+                            if lead:
+                                lead.status = "qualified"
+                                meta = dict(lead.metadata_json or {})
+                                meta["what_they_said"] = f"Customer agreed to ₹4,999 pricing plan for {context_state.get('service', 'AI Calling Service')}."
+                                meta["price_agreed"] = True
+                                lead.metadata_json = meta
+                                await session.commit()
+                    except Exception as q_err:
+                        logger.warning(f"[SarvamTelephony] Qualified sync notice: {q_err}")
+
+                elif dialogue_step >= 4:
+                    name_str = f"{cust_name} जी" if cust_name else "जी"
+                    direct_reply = f"जी बहुत धन्यवाद {name_str}, आपका दिन शुभ हो, नमस्कार!"
+                    should_terminate_after_reply = True
+
             if direct_reply:
                 full_reply = direct_reply
                 logger.info(f"[SarvamTelephony] Dialogue Engine resolved: step={dialogue_step}, reply='{full_reply}'")
@@ -1268,10 +1417,17 @@ class SarvamTelephonyService:
             # Extra Safety: Exact duplicate reply suppression
             if any(full_reply.strip("।,?!. ") == prev.strip("।,?!. ") for prev in prev_agent_texts[-3:]):
                 logger.info(f"[SarvamTelephony] Exact repeat detected in '{full_reply}'. Progressing turn.")
-                if "mr" in lang_code:
-                    full_reply = "नक्कीच! अधिक माहिती आणि बुकिंगसाठी आमच्या प्रतिनिधीकडून कॉल हवा आहे का?"
+                if is_sales_agent:
+                    name_str = f"{cust_name} जी" if cust_name else "जी"
+                    full_reply = f"जी धन्यवाद {name_str}, आपका दिन शुभ हो, नमस्कार!"
+                    should_terminate_after_reply = True
+                elif is_agri_agent:
+                    if "mr" in lang_code:
+                        full_reply = "नक्कीच! अधिक माहिती आणि बुकिंगसाठी आमच्या प्रतिनिधीकडून कॉल हवा आहे का?"
+                    else:
+                        full_reply = "बिल्कुल! बुकिंग के लिए हमारी टीम आपको कॉल करे?"
                 else:
-                    full_reply = "बिल्कुल! अधिक जानकारी और बुकिंग के लिए क्या हमारे प्रतिनिधि आपको कॉल करें?"
+                    full_reply = "जी, क्या मैं आपकी किसी और तरह से सहायता कर सकता हूँ?" 
 
             # Strict Marathi Language Guard: Prevent any Hindi dialect leak in Marathi calls
             if "mr" in lang_code:
@@ -1334,12 +1490,36 @@ class SarvamTelephonyService:
             sequence_counter += 1
 
             # Check if agent concluded call
-            closing_phrases = ["धन्यवाद", "अलविदा", "नमस्कार", "शुभ हो", "bye"]
-            if any(w in full_reply for w in closing_phrases):
-                user_is_closing = any(w in user_text.lower() for w in ["ठीक", "अच्छा", "ok", "okay", "नहीं", "bye", "रखो", "काटो", "नो", "no", "ना", "धन्यवाद", "थैंक यू"])
-                if user_is_closing or "शुभ हो" in full_reply or "समय देने के लिए" in full_reply:
+            if should_terminate_after_reply:
+                logger.info(f"[SarvamTelephony] Dialogue explicitly concluded (step={dialogue_step}). Hanging up carrier call.")
+                await asyncio.sleep(1.2)
+                try:
+                    from app.services.telephony_service import telephony_service
+                    uuid_to_hangup = carrier_call_uuid or stream_id
+                    if uuid_to_hangup:
+                        await telephony_service.hangup_live_telephony_call(
+                            call_uuid=uuid_to_hangup,
+                            auth_id=carrier_auth_id,
+                            auth_token=carrier_auth_token,
+                        )
+                except Exception:
+                    pass
+                try:
+                    await websocket.close()
+                except Exception:
+                    pass
+                return
+
+            # For generic free-form LLM agents only (never cut deterministic sales or agri flows mid-call)
+            if not is_sales_agent and not is_agri_agent:
+                closing_phrases = ["अलविदा", "शुभ हो", "bye", "take care", "goodbye"]
+                is_agent_farewell = any(w in full_reply.lower() for w in closing_phrases) and ("?" not in full_reply and "？" not in full_reply)
+                import re as _re_tokens
+                user_tokens = set(_re_tokens.findall(r"\w+", user_text.lower()))
+                user_is_closing = bool(user_tokens & {"ठीक", "अच्छा", "ok", "okay", "bye", "रखो", "काटो", "नो", "no", "बाय"})
+                if is_agent_farewell and user_is_closing:
                     logger.info("[SarvamTelephony] Natural conversational wrap-up concluded. Hanging up carrier call.")
-                    await asyncio.sleep(1.0)
+                    await asyncio.sleep(1.2)
                     try:
                         from app.services.telephony_service import telephony_service
                         uuid_to_hangup = carrier_call_uuid or stream_id

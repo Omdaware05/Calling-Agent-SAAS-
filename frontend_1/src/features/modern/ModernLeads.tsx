@@ -1,3 +1,4 @@
+import { exportToExcel } from '../../utils/excelExport';
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Download, MapPin, Wallet, PhoneForwarded, Users, Heart, BadgeCheck, PhoneOff, PhoneCall, Eye } from 'lucide-react';
@@ -19,13 +20,13 @@ const FILTERS = [
 ] as const;
 
 export const ModernLeads: React.FC = () => {
-  const { selectedBusiness, isAllBusinesses } = useBusiness();
+  const { selectedBusiness, selectedBusinessId, isAllBusinesses } = useBusiness();
   const [filter, setFilter] = useState<string>('all');
   const [query, setQuery] = useState('');
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
 
   const { data: leads = [], isLoading } = useQuery<LeadDocument[]>({
-    queryKey: ['leads'],
+    queryKey: ['leads', selectedBusinessId],
     queryFn: () => leadsApi.getLeads({ limit: 500 }),
     refetchInterval: 15000,
   });
@@ -62,6 +63,25 @@ export const ModernLeads: React.FC = () => {
   const handleQuickCall = (phone: string, e: React.MouseEvent) => {
     e.stopPropagation();
     window.dispatchEvent(new CustomEvent('voxora-quick-dial', { detail: { phone } }));
+  };
+
+  const handleExportExcel = () => {
+    const exportRows = visible.map((l) => {
+      const meta = l.metadata || {};
+      const ci = meta.customer_info || {};
+      return {
+        'Customer Name': l.name || meta.customer_name || ci.name || 'Unknown Prospect',
+        'Phone Number': l.phone_number,
+        'Status': (l.status || 'new').toUpperCase(),
+        'What Customer Said': meta.what_they_said || l.notes || l.reasoning || '',
+        'When to Call Again': meta.preferred_callback_time || 'N/A',
+        'Service Interested': meta.service_interested || ci.product_interest || 'N/A',
+        'Score': `${Math.round((l.confidence_score ?? l.score ?? 0) * 100)}%`,
+        'Call ID': l.call_id || 'N/A',
+        'Created At': formatDateTime(l.created_at, 'yyyy-MM-dd HH:mm:ss'),
+      };
+    });
+    exportToExcel(exportRows, `voxora_leads_${selectedBusiness?.name || 'agency'}_${filter}`, 'Leads Pipeline');
   };
 
   const stats = [

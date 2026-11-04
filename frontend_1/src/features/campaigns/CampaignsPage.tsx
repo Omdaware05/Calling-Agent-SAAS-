@@ -15,11 +15,11 @@ import { Megaphone, Plus, Play, Square, RefreshCw } from 'lucide-react';
 export const CampaignsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const { selectedBusiness, isAllBusinesses } = useBusiness();
+  const { selectedBusiness, selectedBusinessId, isAllBusinesses } = useBusiness();
   const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   const { data: campaigns = [], isLoading, refetch } = useQuery({
-    queryKey: ['campaigns'],
+    queryKey: ['campaigns', selectedBusinessId],
     queryFn: () => campaignsApi.getCampaigns(),
     refetchInterval: 5000,
   });

@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import verify_app_client
+from app.dependencies import resolve_tenant_id, verify_app_client
 from app.models.agent import Agent
 from app.models.call import Call
 from app.schemas.agent import AgentCreate, AgentResponse, AgentUpdate, StartCallsRequest
@@ -24,14 +24,13 @@ router = APIRouter(prefix="/agents", tags=["agents"], dependencies=[Depends(veri
 
 @router.get("", response_model=List[AgentResponse])
 async def list_agents(
-    tenant_id: Optional[str] = None,
-    business_id: Optional[str] = None,
+    tenant_id: Optional[str] = Depends(resolve_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
     """
     List all configured agents.
     """
-    t_id = tenant_id or business_id
+    t_id = tenant_id
     agents = await agent_service.list_agents(db, tenant_id=t_id)
     return agents
 

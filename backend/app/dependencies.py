@@ -1,10 +1,30 @@
 from typing import Optional
-from fastapi import Header, HTTPException, Security
+from fastapi import Header, HTTPException, Query, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import settings
 
 security = HTTPBearer(auto_error=False)
+
+
+def resolve_tenant_id(
+    tenant_id: Optional[str] = Query(None),
+    business_id: Optional[str] = Query(None),
+    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID"),
+    x_business_id: Optional[str] = Header(None, alias="X-Business-ID"),
+) -> Optional[str]:
+    """
+    Extracts and normalizes the active tenant / business ID from
+    query parameters or HTTP request headers.
+    Returns None if global / all businesses is requested.
+    """
+    raw = tenant_id or business_id or x_tenant_id or x_business_id
+    if not raw:
+        return None
+    cleaned = str(raw).strip()
+    if cleaned.lower() in ("all", "all_clients", "null", "undefined", ""):
+        return None
+    return cleaned
 
 
 async def verify_app_client(

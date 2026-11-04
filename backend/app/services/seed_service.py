@@ -129,6 +129,35 @@ async def seed_initial_data_if_needed():
                         enabled=True,
                     ),
                     Agent(
+                        id="agent-arb-sales-executive",
+                        tenant_id=tenant.id,
+                        name="ARB Sales & Solutions Executive",
+                        purpose="Qualify business prospects, capture customer name, explain AI calling solutions & pricing, and close calls.",
+                        company_name="ARB SoftTech",
+                        company_description="Leading provider of Enterprise AI Voice Calling, Telephony Automation, and Lead Qualification Platforms",
+                        greeting_message="नमस्ते! मैं ARB SoftTech से बात कर रही हूँ। हम बिज़नेसेज़ के लिए AI वॉइस कॉलिंग और ऑटोमेशन सॉल्यूशंस प्रदान करते हैं। क्या आप इस बारे में 1 मिनट बात करने में रुचि रखते हैं?",
+                        instructions=(
+                            "You are an ARB SoftTech Sales Executive speaking with potential business clients. Follow this exact flow:\n"
+                            "1. First Question: Tell 1 line about ARB SoftTech and ask if they are interested. If customer says NO, thank them politely and end the call. If customer says YES, qualify them as interested and ask for their Name.\n"
+                            "2. Ask Name: Once they share their name, acknowledge it and ask which service they are interested in: 1. AI Outbound Calling Agent, 2. Customer Support Automation, or 3. Lead Qualification System.\n"
+                            "3. Explain Pricing: Explain that plans start at ₹4,999 per month with unlimited smart calling and real-time lead intelligence.\n"
+                            "4. Call Closing: Once the customer says OK, thank them by name and conclude the call gracefully."
+                        ),
+                        system_prompt="Conversational ARB SoftTech Sales Executive",
+                        voice_gender="female",
+                        voice_id="ritu",
+                        voice_name="Ritu - Expressive Hindi Female",
+                        tts_provider="sarvam",
+                        language_mode="auto_match",
+                        primary_language="hi",
+                        default_language="Hindi",
+                        supported_languages=["Hindi", "English"],
+                        speaking_speed=1.0,
+                        concurrency=5,
+                        provider="vobiz",
+                        enabled=True,
+                    ),
+                    Agent(
                         id="agent-technical-support",
                         tenant_id=tenant.id,
                         name="Raj (Broadband & Fiber Support)",

@@ -85,7 +85,7 @@ export const DashboardPage: React.FC = () => {
 
   // 1. Fetch all agents from backend
   const { data: agents = [], isLoading: agentsLoading, refetch: refetchAgents } = useQuery<AgentDocument[]>({
-    queryKey: ['agents'],
+    queryKey: ['agents', selectedBusinessId],
     queryFn: () => agentsApi.getAgents(50),
     staleTime: 5000,
     refetchInterval: 10000,
@@ -93,16 +93,16 @@ export const DashboardPage: React.FC = () => {
 
   // 2. Fetch leads from backend
   const { data: leads = [], isLoading: leadsLoading, refetch: refetchLeads } = useQuery<LeadDocument[]>({
-    queryKey: ['leads'],
+    queryKey: ['leads', selectedBusinessId],
     queryFn: () => leadsApi.getLeads(),
     staleTime: 2500,
     refetchInterval: 4000,
   });
 
-  // 3. Global Stats query
+  // 3. Global / Business Stats query
   const { data: globalStats, isLoading: statsLoading, refetch: refetchGlobal } = useQuery({
-    queryKey: ['global-stats'],
-    queryFn: statsApi.getStats,
+    queryKey: ['global-stats', selectedBusinessId],
+    queryFn: () => statsApi.getStats(isAllBusinesses ? undefined : selectedBusinessId),
     staleTime: 2500,
     refetchInterval: 3000,
   });
@@ -113,11 +113,12 @@ export const DashboardPage: React.FC = () => {
   // Determine agents scoped to current business
   const scopedAgents = React.useMemo(() => {
     if (isAllBusinesses || !selectedBusiness) return agents;
-    return agents.filter((a) => selectedBusiness.assignedAgentIds.includes(a.agent_id));
+    const assignedSet = new Set(selectedBusiness.assignedAgentIds || []);
+    return agents.filter((a) => assignedSet.has(a.agent_id) || (a as any).tenant_id === selectedBusiness.id);
   }, [agents, selectedBusiness, isAllBusinesses]);
 
-  // Primary active agent for telemetry within this business
-  const primaryAgent = scopedAgents[0] || agents[0];
+  // Primary active agent for telemetry within this business (no cross-business fallback!)
+  const primaryAgent = scopedAgents[0] || (isAllBusinesses ? agents[0] : null);
   const primaryAgentId = primaryAgent?.agent_id || '';
 
   // 5. Fetch Agent-Specific Dashboard Telemetry for primary agent
@@ -136,16 +137,26 @@ export const DashboardPage: React.FC = () => {
   // Filter active calls for current business / scoped agents
   const scopedActiveCalls = React.useMemo(() => {
     if (isAllBusinesses) return activeCalls;
+    if (!selectedBusiness) return [];
     const agentIds = new Set(scopedAgents.map((a) => a.agent_id));
-    return activeCalls.filter((c) => !c.agent_id || agentIds.has(c.agent_id));
-  }, [activeCalls, scopedAgents, isAllBusinesses]);
+    return activeCalls.filter((c: any) => {
+      if ((c as any).tenant_id && (c as any).tenant_id === selectedBusiness.id) return true;
+      if (c.agent_id && agentIds.has(c.agent_id)) return true;
+      return false;
+    });
+  }, [activeCalls, scopedAgents, isAllBusinesses, selectedBusiness]);
 
   // Filter leads for current business
   const scopedLeads = React.useMemo(() => {
     if (isAllBusinesses) return leads;
+    if (!selectedBusiness) return [];
     const agentIds = new Set(scopedAgents.map((a) => a.agent_id));
-    return leads.filter((l) => !l.agent_id || agentIds.has(l.agent_id));
-  }, [leads, scopedAgents, isAllBusinesses]);
+    return leads.filter((l) => {
+      if (l.tenant_id && l.tenant_id === selectedBusiness.id) return true;
+      if (l.agent_id && agentIds.has(l.agent_id)) return true;
+      return false;
+    });
+  }, [leads, scopedAgents, isAllBusinesses, selectedBusiness]);
 
   const handleHangup = async (callId: string) => {
     try {
@@ -158,9 +169,15 @@ export const DashboardPage: React.FC = () => {
   };
 
   // Telephony counts
-  const totalCalls = isAllBusinesses ? (globalStats?.total_calls ?? 0) : (agentDashboard?.total_calls ?? 0);
-  const completedCalls = isAllBusinesses ? (globalStats?.completed ?? 0) : (agentDashboard?.completed_calls ?? 0);
-  const failedCalls = isAllBusinesses ? (globalStats?.failed ?? 0) : (agentDashboard?.failed_calls ?? 0);
+  const totalCalls = isAllBusinesses
+    ? (globalStats?.total_calls ?? 0)
+    : (globalStats?.total_calls ?? (scopedAgents.length > 0 ? (agentDashboard?.total_calls ?? 0) : 0));
+  const completedCalls = isAllBusinesses
+    ? (globalStats?.completed ?? 0)
+    : (globalStats?.completed ?? (scopedAgents.length > 0 ? (agentDashboard?.completed_calls ?? 0) : 0));
+  const failedCalls = isAllBusinesses
+    ? (globalStats?.failed ?? 0)
+    : (globalStats?.failed ?? (scopedAgents.length > 0 ? (agentDashboard?.failed_calls ?? 0) : 0));
   const totalOutcome = completedCalls + failedCalls;
   const completedPct = totalOutcome > 0 ? Math.round((completedCalls / totalOutcome) * 100) : 0;
   const failedPct = totalOutcome > 0 ? 100 - completedPct : 0;
@@ -177,20 +194,17 @@ export const DashboardPage: React.FC = () => {
 
   // Fetch real recent completed calls
   const { data: allRecentCalls = [] } = useQuery<CallDocument[]>({
-    queryKey: ['recent-calls-global'],
+    queryKey: ['recent-calls-global', selectedBusinessId],
     queryFn: () => callsApi.getCalls({ limit: 10 }),
     refetchInterval: 3000,
   });
 
   const recentCalls: CallDocument[] = React.useMemo(() => {
     if (isAllBusinesses) return allRecentCalls;
-    if (scopedAgents.length === 0) return [];
-    if (agentDashboard?.recent_calls && agentDashboard.recent_calls.length > 0) {
-      return agentDashboard.recent_calls;
-    }
+    if (!selectedBusiness) return [];
     const agentIds = new Set(scopedAgents.map((a) => a.agent_id));
-    return allRecentCalls.filter((c) => (c.tenant_id === selectedBusiness?.id) || (c.agent_id && agentIds.has(c.agent_id)));
-  }, [isAllBusinesses, allRecentCalls, agentDashboard, scopedAgents, selectedBusiness]);
+    return allRecentCalls.filter((c) => (c.tenant_id === selectedBusiness.id) || (c.agent_id && agentIds.has(c.agent_id)));
+  }, [isAllBusinesses, allRecentCalls, scopedAgents, selectedBusiness]);
 
   const handleDownloadPdf = () => {
     const targetBusiness: Business = selectedBusiness || {

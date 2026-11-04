@@ -77,17 +77,24 @@ function pctChange(series: number[]): number | null {
 /* ---------- page ---------- */
 export const ModernDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { selectedBusiness, isAllBusinesses } = useBusiness();
+  const { selectedBusiness, selectedBusinessId, isAllBusinesses } = useBusiness();
 
-  const { data: stats } = useQuery({ queryKey: ['global-stats'], queryFn: statsApi.getStats, refetchInterval: 15000 });
+  const { data: stats } = useQuery({
+    queryKey: ['global-stats', selectedBusinessId],
+    queryFn: () => statsApi.getStats(isAllBusinesses ? undefined : selectedBusinessId),
+    refetchInterval: 15000,
+  });
   const { data: leads = [] } = useQuery<LeadDocument[]>({
-    queryKey: ['leads'],
+    queryKey: ['leads', selectedBusinessId],
     queryFn: () => leadsApi.getLeads({ limit: 500 }),
     refetchInterval: 15000,
   });
-  const { data: agents = [] } = useQuery({ queryKey: ['agents'], queryFn: () => agentsApi.getAgents(50) });
+  const { data: agents = [] } = useQuery({
+    queryKey: ['agents', selectedBusinessId],
+    queryFn: () => agentsApi.getAgents(50),
+  });
   const { data: calls = [] } = useQuery<CallDocument[]>({
-    queryKey: ['modern-calls'],
+    queryKey: ['modern-calls', selectedBusinessId],
     queryFn: () => callsApi.getCalls({ limit: 200 }),
     refetchInterval: 15000,
   });
@@ -143,9 +150,9 @@ export const ModernDashboard: React.FC = () => {
 
   const callsByAgent = useMemo(() => {
     const map = new Map<string, number>();
-    for (const c of calls) if (c.agent_id) map.set(c.agent_id, (map.get(c.agent_id) || 0) + 1);
+    for (const c of scopedCalls) if (c.agent_id) map.set(c.agent_id, (map.get(c.agent_id) || 0) + 1);
     return map;
-  }, [calls]);
+  }, [scopedCalls]);
   const topAgents = [...scopedAgents]
     .map((a) => ({ agent: a, count: callsByAgent.get(a.agent_id) || 0 }))
     .sort((x, y) => y.count - x.count)

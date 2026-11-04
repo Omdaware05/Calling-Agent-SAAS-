@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.dependencies import verify_app_client
+from app.dependencies import resolve_tenant_id, verify_app_client
 from app.models.call import Call, Recording, Transcript, TranscriptSegment
 from app.schemas.call import (
     CallHistoryItem,
@@ -114,8 +114,7 @@ def map_call_to_document(c: Call) -> Dict[str, Any]:
 async def list_calls(
     agent_id: Optional[str] = None,
     campaign_id: Optional[str] = None,
-    tenant_id: Optional[str] = None,
-    business_id: Optional[str] = None,
+    tenant_id: Optional[str] = Depends(resolve_tenant_id),
     state: Optional[str] = None,
     limit: int = Query(100, ge=1, le=200),
     skip: int = Query(0, ge=0),
@@ -124,7 +123,7 @@ async def list_calls(
     """
     List calls formatted for frontend Calls table and dashboard.
     """
-    t_id = tenant_id or business_id
+    t_id = tenant_id
     stmt = (
         select(Call)
         .options(
@@ -463,9 +462,9 @@ async def get_call_recording(
     if (not call.recording or not (await storage_service.exists(call.recording.storage_key))) and (call.status in TERMINAL_STATES):
         try:
             await persist_post_call_artifacts(db, call)
+            await db.commit()
         except Exception:
-            pass
-        await db.commit()
+            await db.rollback()
         res = await db.execute(stmt)
         call = res.scalar_one_or_none()
 

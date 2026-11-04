@@ -67,7 +67,7 @@ export const AgentsPage: React.FC = () => {
   };
 
   const { data: agents = [], isLoading, refetch } = useQuery({
-    queryKey: ['agents'],
+    queryKey: ['agents', selectedBusinessId],
     queryFn: () => agentsApi.getAgents(50),
   });
 

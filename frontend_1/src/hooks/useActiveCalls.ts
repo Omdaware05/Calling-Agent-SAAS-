@@ -5,7 +5,7 @@ import { ActiveCallsResponse } from '../types/api';
 export function useActiveCalls(enabled = true) {
   const activeCallsQuery = useQuery<ActiveCallsResponse>({
     queryKey: ['active-calls'],
-    queryFn: statsApi.getActiveCalls,
+    queryFn: () => statsApi.getActiveCalls(),
     refetchInterval: enabled ? 1500 : false,
     staleTime: 1000,
     retry: 2,

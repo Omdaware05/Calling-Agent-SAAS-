@@ -10,12 +10,17 @@ export const apiClient = axios.create({
   timeout: 300000,
 });
 
-// Request interceptor for token injection
+// Request interceptor for token injection and active business context
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('api_auth_token');
   if (token) {
     config.headers['Authorization'] = `Bearer ${token}`;
     config.headers['X-API-Token'] = token;
+  }
+  const activeBizId = localStorage.getItem('voxora_active_business_id_v1');
+  if (activeBizId && activeBizId !== 'all') {
+    config.headers['X-Tenant-ID'] = activeBizId;
+    config.headers['X-Business-ID'] = activeBizId;
   }
   return config;
 });

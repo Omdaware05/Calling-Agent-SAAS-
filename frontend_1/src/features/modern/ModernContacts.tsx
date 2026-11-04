@@ -41,7 +41,7 @@ type StatusFilter = 'all' | 'interested' | 'not_interested' | 'unanalyzed';
 export const ModernContacts: React.FC = () => {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const { selectedBusiness, isAllBusinesses } = useBusiness();
+  const { selectedBusiness, selectedBusinessId, isAllBusinesses } = useBusiness();
 
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -68,7 +68,7 @@ export const ModernContacts: React.FC = () => {
   const [newAgentId, setNewAgentId] = useState('');
 
   const { data: contacts = [], isLoading, refetch } = useQuery<ContactDocument[]>({
-    queryKey: ['contacts'],
+    queryKey: ['contacts', selectedBusinessId],
     queryFn: () => contactsApi.getContacts({ limit: 500 }),
     refetchInterval: 8000,
   });
