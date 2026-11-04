@@ -27,11 +27,19 @@ class FastQuestionnaireOrchestrator:
         r"no\s+thanks|no\s+thank\s+you|nahi\s+bhai|nako\s+re|nako\s+baba|nakoy)\b|"
         r"^(?:no|nope|nahi|nahin|nako|नको|नाही|नहीं|kat\s+do|kaat\s+do|band\s+karo)[.!?, ]*$|"
         r"नको\s+आहे|गरज\s+नाही|रस\s+नाही|नाही\s+पाहिजे|नकोय|फोन\s+करू\s+नका|"
-        r"नहीं\s+चाहिए|रहने\s+दो|रहने\s+दीजिए|राहू\s+द्या|कॉल\s+काटो|फोन\s+मत\s+करो",
+        r"नहीं\s+चाहिए|रहने\s+दो|रहने\s+दीजिए|राहू\s+द्या|कॉल\s+काटो|फोन\s+मत\s+करो|"
+        # Mixed-script refusal ("interest नाही"): lives in this final group
+        # because the first group's trailing \b never matches after a
+        # Devanagari vowel sign at end-of-string.
+        r"interest\s+नाही",
         re.IGNORECASE
     )
 
-    MARATHI_INDICATORS = re.compile(r"[\u0900-\u097F]*(?:आहे|का|साहेब|करा|नाही|नको|द्या|सांगा|किती|घ्या|पाहिजे|व्हरायटी|नियोजन|एकरा|दिवसांत)")
+    # NOTE: the Marathi question particle "का" must be a standalone word
+    # (\s का \b) — as a bare substring it also matches inside common Hindi
+    # words like "जानकारी" and "सलाहकार", which misclassified pure-Hindi
+    # scripts as Marathi and made every scripted reply come out in Marathi.
+    MARATHI_INDICATORS = re.compile(r"[\u0900-\u097F]*(?:आहे|\sका\b|साहेब|करा|नाही|नको|द्या|सांगा|किती|घ्या|पाहिजे|व्हरायटी|नियोजन|एकरा|दिवसांत)")
     HINDI_INDICATORS = re.compile(r"[\u0900-\u097F]*(?:है|क्या|जी|नमस्ते|बताइए|चाहिए|कीजिए|खरीदना|देंगे|लेना|धन्यवाद)")
 
     @classmethod
@@ -61,7 +69,7 @@ class FastQuestionnaireOrchestrator:
         # or:
         # 1. Question: "..." (Type: text)
         q_regex = re.compile(
-            r'(\d+)\.\s*Question:\s*"([^"]+)"(?:\s*\([^)]*\))?'
+            r'(\d+)\.\s*Question:\s*"([^"]+)"(?:\s*\(([^)]*)\))?'
             r'(?:\s*\n\s*-\s*Expected Answer\s*(?:/\s*Reference)?:\s*"([^"]*)")?',
             re.IGNORECASE
         )
@@ -69,11 +77,14 @@ class FastQuestionnaireOrchestrator:
         for m in q_regex.finditer(block):
             num = int(m.group(1))
             q_text = m.group(2).strip()
-            exp_ans = m.group(3).strip() if m.group(3) else ""
+            paren = m.group(3) or ""
+            exp_ans = m.group(4).strip() if m.group(4) else ""
+            type_match = re.search(r'Type:\s*([\w-]+)', paren, re.IGNORECASE)
             questions.append({
                 "index": num,
                 "text": q_text,
                 "expected_answer": exp_ans,
+                "type": type_match.group(1).lower() if type_match else "",
             })
 
         return questions
@@ -136,6 +147,88 @@ class FastQuestionnaireOrchestrator:
                 return True
         return False
 
+    # Markers that make a caller utterance a QUESTION rather than an answer
+    # to the current script question. Deliberately conservative: a false
+    # positive costs one fallback line + the pending question repeated; a
+    # false negative lets the LLM improvise an answer, which must not happen.
+    _QUESTION_WORDS = {
+        "kya", "क्या", "kitna", "kitne", "kitni", "किती", "kab", "कब", "kahan",
+        "kaha", "kaise", "कैसे", "kaisa", "kese", "kyu", "kyon", "क्यों",
+        "konsa", "konsi", "konta", "konti", "kadhi", "कधी", "kase", "काय",
+        "kuthe", "kashala", "what", "which", "how", "when", "where", "why",
+        "does",
+    }
+    _QUESTION_PHRASES = (
+        "is there", "do you", "can i", "can we", "hai kya", "है क्या",
+        "ahe ka", "ahet ka", "आहे का", "milega kya", "hoga kya",
+    )
+    _QA_FILLER_TOKENS = {
+        "hai", "hain", "kya", "ahe", "ahet", "the", "is", "are", "was", "me",
+        "mein", "ka", "ki", "ke", "ko", "se", "ne", "aur", "bhi", "to", "hi",
+        "aap", "aapka", "mera", "mere", "mujhe", "hum", "yeh", "ye", "wo",
+        "woh", "ek", "kar", "karke", "raha", "rahe", "rahi", "gaya", "wali",
+        "wala", "wale", "batao", "please", "for", "and", "with", "your",
+        "yours", "have", "has", "had", "will", "would", "can", "could",
+        "should", "there", "their", "them", "they", "this", "that", "these",
+        "those", "what", "which", "when", "where", "about",
+        # The subject of nearly every Q&A in a script — carries no
+        # discriminating power for matching a caller's question to one item.
+        "college", "institute", "company", "school", "technology",
+    }
+    _QA_SHORT_SIGNIFICANT = {"fee", "fees", "jee", "cet", "lpa"}
+
+    @classmethod
+    def _looks_like_question(cls, text: str) -> bool:
+        """True when the caller's utterance is phrased as a question."""
+        if not text:
+            return False
+        if "?" in text:
+            return True
+        norm = cls._normalize_for_match(text)
+        if any(phrase in norm for phrase in cls._QUESTION_PHRASES):
+            return True
+        return any(tok in cls._QUESTION_WORDS for tok in norm.split())
+
+    @classmethod
+    def _qa_tokens(cls, text: str) -> set:
+        """Significant content tokens of a text for Q&A matching."""
+        norm = cls._normalize_for_match(text)
+        return {
+            t for t in norm.split()
+            if (len(t) >= 4 or t in cls._QA_SHORT_SIGNIFICANT)
+            and t not in cls._QA_FILLER_TOKENS
+        }
+
+    @classmethod
+    def _token_match(cls, a: str, b: str) -> bool:
+        if a == b:
+            return True
+        short, long_ = (a, b) if len(a) <= len(b) else (b, a)
+        return len(short) >= 3 and long_.startswith(short) and len(long_) - len(short) <= 2
+
+    @classmethod
+    def _qa_overlap_match(cls, caller_text: str, q_text: str) -> bool:
+        """True when the caller's utterance shares significant content tokens
+        with a scripted Q&A question (so 'hostel hai kya?' or 'fees kitni
+        hai?' land on their scripted answer, not on the free-form LLM)."""
+        caller_tokens = cls._qa_tokens(caller_text)
+        q_tokens = cls._qa_tokens(q_text)
+        if not caller_tokens or not q_tokens:
+            return False
+        shared = {
+            ct for ct in caller_tokens
+            if any(cls._token_match(ct, qt) for qt in q_tokens)
+        }
+        if len(shared) >= 2:
+            return True
+        if len(shared) == 1:
+            only = next(iter(shared))
+            matched_q = next(qt for qt in q_tokens if cls._token_match(only, qt))
+            distinctive = len(only) >= 5 or only in cls._QA_SHORT_SIGNIFICANT \
+                or matched_q in cls._QA_SHORT_SIGNIFICANT
+            return distinctive and cls._looks_like_question(caller_text)
+        return False
+
     @classmethod
     def asked_question_indices(
         cls, questions: List[Dict[str, Any]], assistant_messages: List[str]
@@ -166,9 +259,11 @@ class FastQuestionnaireOrchestrator:
     ) -> Optional[Dict[str, Any]]:
         """First question (in script order) that has NOT been asked yet.
         Advancing to the first unasked question — instead of last+1 — means a
-        question can never be repeated and never silently skipped."""
+        question can never be repeated and never silently skipped.
+        Items typed "reference" are knowledge Q&A for answering the caller —
+        they are NEVER served as questions to ask."""
         for q in sorted(questions, key=lambda x: x["index"]):
-            if q["index"] not in asked:
+            if q["index"] not in asked and (q.get("type") or "").lower() != "reference":
                 return q
         return None
 
@@ -292,19 +387,60 @@ class FastQuestionnaireOrchestrator:
                 return f"जी, {company_desc} के सिलसिले में आपको जानकारी देने के लिए कॉल किया है।{q_suffix}"
             return f"I am reaching out regarding {company_desc}.{q_suffix}"
 
-        # 10. Check if caller asked a direct question matching a scripted Q&A item
+        # 10. Check if caller asked a direct question matching a scripted Q&A
+        # item. Legacy price/info keyword match, widened with significant-
+        # token overlap so questions like "hostel hai kya?" or "fees kitni
+        # hai?" also land on their scripted answer instead of the LLM. The
+        # overlap path only fires for question-phrased utterances — a plain
+        # answer that merely shares words with a Q&A item must advance the
+        # script, not trigger an answer. When several items match, the one
+        # sharing the most content tokens wins (price intent breaks ties).
+        _QA_KEYWORDS = ["किंमत", "price", "rate", "दर", "खर्च", "व्हरायटी", "माहिती", "फायदे"]
+        _PRICE_MARKERS = {"fee", "fees", "price", "rate", "cost", "tuition",
+                          "charge", "charges", "kitna", "kitne", "kitni"}
+        caller_is_question = cls._looks_like_question(last_user_msg)
+        caller_tokens = cls._qa_tokens(last_user_msg)
+        caller_price_intent = bool(caller_tokens & _PRICE_MARKERS) or \
+            any(kw in last_user_lower for kw in ["किंमत", "दर", "खर्च"])
+        best_q, best_key = None, None
         for q in questions:
             q_text_lower = q["text"].lower()
             exp_ans = q.get("expected_answer", "")
-            if exp_ans and exp_ans.lower() not in ("any answer", ""):
-                if any(kw in last_user_lower for kw in ["किंमत", "price", "rate", "दर", "खर्च", "व्हरायटी", "माहिती", "फायदे"]):
-                    if any(kw in q_text_lower for kw in ["किंमत", "price", "rate", "दर", "खर्च", "व्हरायटी", "माहिती", "फायदे"]):
-                        logger.info(f"FastQuestionnaireEngine: Direct Q&A match for '{q['text']}' -> returning expected answer directly")
-                        if script_lang == "mr":
-                            return f"साहेब, {exp_ans}. पुढचा प्रश्न..."
-                        elif script_lang == "hi":
-                            return f"जी, {exp_ans}।"
-                        return f"Regarding that, {exp_ans}."
+            if not exp_ans or exp_ans.lower() in ("any answer", ""):
+                continue
+            legacy_match = any(kw in last_user_lower for kw in _QA_KEYWORDS) and \
+                any(kw in q_text_lower for kw in _QA_KEYWORDS)
+            overlap_match = caller_is_question and cls._qa_overlap_match(last_user_msg, q["text"])
+            if not (legacy_match or overlap_match):
+                continue
+            q_tokens = cls._qa_tokens(q["text"])
+            shared = sum(1 for tok in caller_tokens
+                         if any(cls._token_match(tok, qt) for qt in q_tokens))
+            q_price = 1 if (caller_price_intent and q_tokens & _PRICE_MARKERS) else 0
+            key = (q_price, shared, -q["index"])
+            if best_key is None or key > best_key:
+                best_q, best_key = q, key
+        if best_q is not None:
+            exp_ans = best_q["expected_answer"]
+            logger.info(f"FastQuestionnaireEngine: Direct Q&A match for '{best_q['text']}' -> returning expected answer directly")
+            if script_lang == "mr":
+                return f"साहेब, {exp_ans}. पुढचा प्रश्न..."
+            elif script_lang == "hi":
+                return f"जी, {exp_ans}।"
+            return f"Regarding that, {exp_ans}."
+
+        # 11. Unknown-question guard: the caller asked something that has NO
+        # scripted answer. Never let the LLM invent one — speak the fixed
+        # fallback line and carry on with the pending script question.
+        if cls._looks_like_question(last_user_msg):
+            next_q = cls.next_unasked_question(questions, asked_indices)
+            q_suffix = f" {next_q['text']}" if next_q else ""
+            logger.info("FastQuestionnaireEngine: Unknown caller question -> fixed no-information fallback (LLM invention blocked)")
+            if script_lang == "mr":
+                return f"माझ्याकडे याची माहिती सध्या नाही. आमची टीम आपल्याला कॉल करून माहिती देईल.{q_suffix}"
+            elif script_lang == "hi":
+                return f"मेरे पास इसकी जानकारी अभी नहीं है। हमारी टीम आपको कॉल करके जानकारी देगी।{q_suffix}"
+            return f"I don't have that information currently. Our team will call you back with the details.{q_suffix}"
 
         # 12. Advance to the FIRST question that has not been asked yet.
         # (When nothing was asked yet — e.g. the caller just replied to the
@@ -332,6 +468,38 @@ class FastQuestionnaireOrchestrator:
         elif script_lang == "hi":
             return "धन्यवाद जी, आपकी सभी जानकारी दर्ज कर ली गई है। हमारा प्रतिनिधि जल्द ही आपसे संपर्क करेगा। आपका दिन शुभ हो!"
         return "Thank you so much, all your details have been noted. Our team will contact you shortly. Have a great day!"
+
+
+    @classmethod
+    def resolve_next_turn_detailed(cls, messages: List[Dict[str, Any]]) -> Tuple[Optional[str], bool]:
+        """resolve_next_turn + a terminal flag: True when the returned reply
+        ends the call (caller-refusal goodbye, or the script-completed
+        closing). Telephony engines use it to hang up cleanly after speaking
+        the reply instead of waiting for another caller turn. The plain
+        resolve_next_turn contract is unchanged for existing callers."""
+        reply = cls.resolve_next_turn(messages)
+        if reply is None:
+            return None, False
+        system_prompt = ""
+        assistant_msgs: List[str] = []
+        last_user_msg = ""
+        for m in messages:
+            role = m.get("role", "")
+            content = m.get("content", "") or ""
+            if role == "system" and not system_prompt:
+                system_prompt = content
+            elif role == "assistant":
+                assistant_msgs.append(content)
+            elif role == "user":
+                last_user_msg = content.strip()
+        if last_user_msg and cls.is_refusal(last_user_msg):
+            return reply, True
+        questions = cls.parse_questionnaire_from_prompt(system_prompt)
+        if questions:
+            asked = cls.asked_question_indices(questions, assistant_msgs)
+            if cls.next_unasked_question(questions, asked) is None:
+                return reply, True
+        return reply, False
 
 
 fast_questionnaire_orchestrator = FastQuestionnaireOrchestrator()

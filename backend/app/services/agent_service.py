@@ -23,7 +23,9 @@ def format_questionnaire_prompt_block(title: str, questions: list) -> str:
         q_text = q.get("text") or q.get("question") or q.get("title") or ""
         expected = q.get("expected_answer")
         if expected:
-            lines.append(f"{idx}. Question: \"{q_text}\"\n   - Expected Answer / Reference: \"{expected}\"")
+            q_type = q.get("type")
+            type_str = f" (Type: {q_type})" if q_type else ""
+            lines.append(f"{idx}. Question: \"{q_text}\"{type_str}\n   - Expected Answer / Reference: \"{expected}\"")
         else:
             q_type = q.get("type", "general")
             q_opts = q.get("options")
