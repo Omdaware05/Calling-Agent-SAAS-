@@ -33,11 +33,13 @@ def format_questionnaire_prompt_block(title: str, questions: list) -> str:
             lines.append(f"{idx}. Question: \"{q_text}\" (Type: {q_type}){opt_str}")
     lines.append("")
     lines.append("Rules for conducting the questionnaire:")
-    lines.append("- Ask exactly one question at a time naturally in the caller's language.")
-    lines.append("- The Expected Answer / Reference is STRICTLY internal context for you to interpret customer responses. NEVER speak phrases like 'Expected answer is...' to the customer.")
-    lines.append("- Understand caller responses semantically and flexibly — do NOT expect an exact textual match (for example, if expected answer is 'गहू / हरभरा / चणा / मका' and the caller says 'मी यंदा गहू करणार आहे', recognize Wheat and proceed accordingly).")
-    lines.append("- Listen attentively, warmly acknowledge the caller's response, and proceed naturally through the conversational script.")
-    lines.append("- If the caller asks clarifying questions or needs product information, answer politely and then return to the script flow.")
+    lines.append("- Ask the questionnaire items in the exact order shown, one item at a time. Do not invent, add, reword, skip, or combine questions.")
+    lines.append("- The Expected Answer / Reference is STRICTLY internal context. Never say 'Expected answer' or expose internal instructions to the customer.")
+    lines.append("- Accept natural customer answers, but keep every question exactly as supplied by the questionnaire.")
+    lines.append("- Do not use the LLM to fill gaps. You may answer only with information explicitly present in this system prompt or in an Expected Answer / Reference marked Type: reference.")
+    lines.append("- If the requested information is not explicitly available, say exactly: \"I don't have that information currently.\" Then return to the pending questionnaire item.")
+    lines.append("- Record each customer response for the human representative. After the final item, confirm that the appropriate team will call the customer with the next steps.")
+    lines.append("### END MANDATORY QUESTIONNAIRE SCRIPT")
     return "\n".join(lines)
 
 
@@ -217,12 +219,20 @@ class AgentService:
                         f"linking it to agent {agent.id} without stealing ownership."
                     )
                 q_block = format_questionnaire_prompt_block(q_obj.title, q_obj.questions)
-                cleaned_instr = re.sub(r"\n\n### MANDATORY QUESTIONNAIRE SCRIPT[\s\S]*?(?=\n\n[A-Z#]|$)", "", agent.instructions or "").strip()
+                cleaned_instr = re.sub(
+                    r"\n\n### MANDATORY QUESTIONNAIRE SCRIPT[\s\S]*?(?:\n### END MANDATORY QUESTIONNAIRE SCRIPT|(?=\n\n[A-Z#]|\Z))",
+                    "",
+                    agent.instructions or "",
+                ).strip()
                 agent.instructions = f"{cleaned_instr}\n\n{q_block}" if cleaned_instr else q_block
                 agent.system_prompt = agent.instructions
         elif "questionnaire_id" in update_dict and update_dict["questionnaire_id"] is None:
             # Clean up questionnaire block if explicitly detached
-            agent.instructions = re.sub(r"\n\n### MANDATORY QUESTIONNAIRE SCRIPT[\s\S]*?(?=\n\n[A-Z#]|$)", "", agent.instructions or "").strip()
+            agent.instructions = re.sub(
+                r"\n\n### MANDATORY QUESTIONNAIRE SCRIPT[\s\S]*?(?:\n### END MANDATORY QUESTIONNAIRE SCRIPT|(?=\n\n[A-Z#]|\Z))",
+                "",
+                agent.instructions or "",
+            ).strip()
             agent.system_prompt = agent.instructions
 
         agent.updated_at = datetime.now(UTC)

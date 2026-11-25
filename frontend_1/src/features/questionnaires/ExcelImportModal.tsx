@@ -171,9 +171,9 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
               <div className="flex items-center gap-2.5">
                 <FileSpreadsheet className="w-5 h-5 text-orange-500 dark:text-orange-400 shrink-0" />
                 <div>
-                  <p className="font-semibold">Required Excel Columns</p>
+                  <p className="font-semibold">Excel columns</p>
                   <p className="text-slate-500 dark:text-orange-300/70 text-[11px] mt-0.5">
-                    Your Excel sheet should have headers: <strong>Question</strong> and <strong>Expected Answer</strong>.
+                    Basic import: <strong>Question</strong> and <strong>Expected Answer</strong>. For multilingual calls, use the downloadable template with language and Type columns.
                   </p>
                 </div>
               </div>

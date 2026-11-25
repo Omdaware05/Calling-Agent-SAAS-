@@ -95,7 +95,9 @@ class Settings(BaseSettings):
 
     # Gemini API Settings for Lead Interest Intelligence
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.0-flash"
+    # Use a current model alias. Older Gemini 1.5/2.0/2.5 model names can
+    # remain visible in a project but return HTTP 404 for new API users.
+    GEMINI_MODEL: str = "gemini-flash-lite-latest"
 
 
     @field_validator("DOGRAH_BASE_URL", mode="before")

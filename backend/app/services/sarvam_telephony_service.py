@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import math
+import re
 import struct
 import time
 import uuid
@@ -19,6 +20,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.agent import Agent
+from app.models.questionnaire import Questionnaire
 from app.models.call import Call, Recording, Transcript, TranscriptSegment
 from app.models.contact import Contact
 from app.models.lead import Lead
@@ -364,9 +366,49 @@ class SarvamTelephonyService:
             "बाद में बात", "बाद में करो", "बाद में कॉल", "बाद में call",
             "फिर कॉल", "फिर call", "अभी बिजी", "बिजी हूँ", "बिजी हूं",
             "व्यस्त हूँ", "व्यस्त हूं", "busy right now", "busy now",
-            "अभी बात नहीं", "बाद में बात करेंगे",
+            "अभी बात नहीं", "बाद में बात करेंगे", "बाद में फोन", "नंतर फोन",
+            "नंतर कॉल", "नंतर बोला", "नंतर सांगा", "नंतर करा", "कल कॉल", "उद्या फोन",
+            "उद्या करा", "नंतर सांगतो", "बाद में बताऊंगा", "थोड़ी देर बाद", "देर बाद",
+            "थोडी देर बाद", "थोड़ी देर बाद", "थोड्या वेळाने", "थोडे वेळाने", "वेळ नाही",
+            "टाइम नाही", "टाइम नही", "बाद में करना", "कल बात", "उद्या बोलू", "busy hu", "busy ahe"
         )
-        return any(p in t for p in callback_phrases)
+        if any(p in t for p in callback_phrases):
+            return True
+        import re
+        cb_patterns = [
+            r"(?:थोड़ी\s+देर\s+बाद|देर\s+बाद|बाद\s+में|नंतर|थोड्या\s+वेळाने|थोडे\s+वेळाने|फिर|कल|उद्या)\s*(?:कॉल|फोन|call|phone|बात|बोला|करा|करो|करना)",
+            r"(?:कॉल|फोन|call|phone|बात|बोला)\s*(?:बाद\s+में|नंतर|कल|उद्या|फिर|थोड़ी\s+देर\s+बाद|थोड्या\s+वेळाने|थोडे\s+वेळाने)",
+            r"(?:बाद\s+में|नंतर|थोड्या\s+वेळाने|थोडे\s+वेळाने|थोड़ी\s+देर\s+बाद)\s*(?:करना|करा|करिए|करिये|कर\s+सकते|करो)",
+            r"(?:baad\s+me|bad\s+me|nantar|thodi\s+der\s+baad|der\s+baad|kal|udya)\s*(?:call|phone|baat|bola|kara|karo|karna)",
+            r"(?:call|phone|baat|bola)\s*(?:baad\s+me|bad\s+me|nantar|kal|udya|thodi\s+der\s+baad|der\s+baad)",
+            r"(?:baad\s+me|bad\s+me|nantar|thodi\s+der\s+baad)\s*(?:karna|kara|kariye|kar\s+sakte|karo)",
+            r"\b(?:call\s+(?:me\s+)?later|call\s+back|call\s+me\s+back|call\s+tomorrow|call\s+again|call\s+later\s+please)\b",
+            r"\b(?:busy\s+(?:right\s+)?now|busy\s+now|in\s+a\s+meeting|cant\s+talk|can't\s+talk|busy\s+hu|busy\s+ahe)\b",
+            r"(?:अभी|सध्या|आता)\s*(?:बिजी|व्यस्त|कामात|वेळ\s+नाही|टाइम\s+नहीं|टाइम\s+नाही)",
+            r"(?:वेळ\s+नाही|टाइम\s+नाही|टाइम\s+नही|समय\s+नहीं)",
+        ]
+        return any(re.search(p, t, re.IGNORECASE) for p in cb_patterns)
+
+    @staticmethod
+    def is_farewell_reply(text: str) -> bool:
+        """True if the assistant text is a closing/farewell statement and asks no further questions."""
+        if not text:
+            return False
+        t = text.lower().strip()
+        question_markers = ["?", "？", "बताइए", "बताएं", "सांगा", "का?", "कितने", "किती", "कोणती", "क्या आप", "तुम्ही"]
+        if any(q in t for q in question_markers) or t.endswith("?"):
+            return False
+        closing_signatures = (
+            "समय देने के लिए", "समय देने के लिए आपका बहुत धन्यवाद", "समय देने के लिए धन्यवाद",
+            "वेळ दिल्याबद्दल", "वेळ दिल्याबद्दल खूप धन्यवाद", "वेळ दिल्याबद्दल धन्यवाद",
+            "thank you for your time", "thanks for your time",
+            "दिन शुभ हो", "दिवस शुभ जावो", "have a great day",
+            "अलविदा", "goodbye", "take care",
+            "संपर्क करने के लिए बहुत धन्यवाद", "संपर्क केल्याबद्दल खूप धन्यवाद",
+            "फिर कभी बात करेंगे", "बाद में सुविधानुसार कॉल करेंगे", "नंतर सोयीच्या वेळी पुन्हा कॉल करू",
+            "बाद में कॉल करेंगे", "नंतर कॉल करू", "पुन्हा कॉल करू", "बाद में फोन करेंगे"
+        )
+        return any(sig in t for sig in closing_signatures)
 
     async def synthesize_speech(
         self,
@@ -786,7 +828,37 @@ class SarvamTelephonyService:
         voice_id = getattr(agent, "voice_id", None) or self.default_voice
 
         # Determine selected language & dialect
-        agent_lang = (getattr(agent, "default_language", None) or getattr(agent, "primary_language", None) or "Hindi").lower()
+        # The UI's Primary Spoken Language must control the live call. Older
+        # agents used "multi" as a placeholder; in that case retain their
+        # stored default as the backward-compatible fallback.
+        primary_lang = (getattr(agent, "primary_language", None) or "").strip()
+        selected_lang = primary_lang if primary_lang.lower() not in {"", "multi", "auto"} else (getattr(agent, "default_language", None) or "Hindi")
+        agent_lang = selected_lang.lower()
+        language_key = "marathi" if "marathi" in agent_lang or "mr" in agent_lang else "english" if "english" in agent_lang or agent_lang == "en" else "hinglish" if "hinglish" in agent_lang else "hindi"
+        runtime_instructions = agent.instructions or agent.system_prompt or ""
+        runtime_greeting = ""
+        # Localize questionnaire wording at call time. One questionnaire keeps
+        # one stable question ID/answer schema while the caller hears only the
+        # variant selected in the frontend.
+        if getattr(agent, "questionnaire_id", None):
+            async with AsyncSessionLocal() as session:
+                questionnaire = await session.get(Questionnaire, agent.questionnaire_id)
+            if questionnaire and questionnaire.questions:
+                localized_questions = []
+                for original in questionnaire.questions:
+                    item = dict(original)
+                    translations = item.get("translations") or {}
+                    if translations.get(language_key):
+                        item["text"] = translations[language_key]
+                    answer_translations = item.get("answer_translations") or {}
+                    if answer_translations.get(language_key):
+                        item["expected_answer"] = answer_translations[language_key]
+                    localized_questions.append(item)
+                from app.services.agent_service import format_questionnaire_prompt_block
+                base = re.sub(r"\n\n### MANDATORY QUESTIONNAIRE SCRIPT[\s\S]*", "", runtime_instructions).strip()
+                runtime_instructions = f"{base}\n\n{format_questionnaire_prompt_block(questionnaire.title, localized_questions)}"
+                first = next((q for q in localized_questions if (q.get("type") or "") not in {"reference", "closing"}), None)
+                runtime_greeting = (first or {}).get("text", "")
         if "marathi" in agent_lang or "mr" in agent_lang:
             lang_code = "mr-IN"
             lang_name = "Marathi"
@@ -799,6 +871,14 @@ class SarvamTelephonyService:
             default_greeting = f"Hello! This is {agent_name} from {comp_name}. Are you interested in our services?"
             farewell_reply = "Alright, thank you for your time! Have a great day."
             interest_followup = "Great! Please let me know what information you need."
+        elif "hinglish" in agent_lang:
+            # Sarvam's Hindi voice is appropriate for Hinglish; the LLM rules
+            # below keep vocabulary naturally mixed rather than formal Hindi.
+            lang_code = "hi-IN"
+            lang_name = "Hinglish"
+            default_greeting = f"Hello! Main {comp_name} se {agent_name} bol raha hoon. Can I share some details?"
+            farewell_reply = "Theek hai, thanks for your time. Have a great day!"
+            interest_followup = "Great, aapko kis information ki zaroorat hai?"
         elif "gujarati" in agent_lang or "gu" in agent_lang:
             lang_code = "gu-IN"
             lang_name = "Gujarati"
@@ -813,14 +893,20 @@ class SarvamTelephonyService:
             interest_followup = "बहुत बढ़िया! बताइए आप किस सेवा या सहायता के बारे में जानना चाहते हैं?"
 
         # Every agent greets customer and asks if they are interested or not in selected language
-        greeting = (getattr(agent, "greeting_message", None) or "").strip()
+        greeting = runtime_greeting or (getattr(agent, "greeting_message", None) or "").strip()
         if not greeting:
             greeting = default_greeting
         else:
             has_interest_q = any(k in greeting.lower() for k in [
                 "interested", "interest", "रुचि", "इंटरेस्टेड", "इंटरेस्ट", "स्वारस्य", "रस", "चाहते हैं", "चाहते हो"
             ])
-            if not has_interest_q:
+            # A configured greeting that already asks any clear question is
+            # complete. Do not append the generic "interested in our
+            # services" question: it changes the customer's approved opening
+            # and can mix languages (for example an English college greeting
+            # followed by the default Hindi sales question).
+            has_explicit_question = "?" in greeting or "।" in greeting
+            if not has_interest_q and not has_explicit_question:
                 if "mr" in lang_code:
                     greeting = f"{greeting.rstrip('।,?!.')}. तुम्हाला आमच्या सेवेमध्ये इंटरेस्ट आहे का?"
                 elif "en" in lang_code:
@@ -835,13 +921,19 @@ class SarvamTelephonyService:
                 f"- NEVER switch to Hindi! Never use Hindi words like 'बहुत बढ़िया', 'क्या आप', 'बताइए', 'बीज', 'गेहूँ', 'चना', 'बुवाई', 'है', 'कीजिए'.\n"
                 f"- ALWAYS use proper Marathi: 'खूप छान', 'बियाणे', 'गहू आणि हरभरा', 'पेरणी', 'सांगा', 'आहे', 'तुम्हाला / आपल्याला', 'आपण'.\n"
             )
+        elif lang_name == "Hinglish":
+            lang_rules = (
+                "STRICT HINGLISH LANGUAGE LOCK:\n"
+                "- Speak natural Indian Hinglish: simple Hindi with common English business words.\n"
+                "- Do not switch to Marathi or formal/pure Hindi.\n"
+            )
         else:
             lang_rules = f"1. Spoken Language: Respond naturally in {lang_name} ({lang_code}). Never use English roman script for Indic languages or markdown.\n"
 
         system_prompt = (
             f"You are '{agent_name}', a helpful and polite AI Voice Calling Assistant representing '{comp_name}'.\n"
             f"Company / Purpose: {comp_desc}\n\n"
-            f"INSTRUCTIONS & SCRIPT:\n{agent.instructions or agent.system_prompt or ''}\n\n"
+            f"INSTRUCTIONS & SCRIPT:\n{runtime_instructions}\n\n"
             f"RULES FOR CONVERSATIONAL PHONE CALL:\n"
             f"{lang_rules}"
             f"2. Strict 1 Short Sentence: Keep replies strictly under 15 words total. Never give long speeches.\n"
@@ -1017,6 +1109,26 @@ class SarvamTelephonyService:
                     await session.commit()
             sequence_counter += 1
 
+            # 0. Check if assistant has already delivered a farewell earlier in this call
+            if any(self.is_farewell_reply(m.get("content", "")) for m in conversation_history if m.get("role") == "assistant"):
+                logger.info(f"[SarvamTelephony] Assistant already delivered farewell earlier in call {call_id}. Concluding carrier call immediately.")
+                try:
+                    from app.services.telephony_service import telephony_service
+                    uuid_to_hangup = carrier_call_uuid or stream_id
+                    if uuid_to_hangup:
+                        await telephony_service.hangup_live_telephony_call(
+                            call_uuid=uuid_to_hangup,
+                            auth_id=carrier_auth_id,
+                            auth_token=carrier_auth_token,
+                        )
+                except Exception:
+                    pass
+                try:
+                    await websocket.close()
+                except Exception:
+                    pass
+                return
+
             # 1. Check if caller requested a callback or is busy / postponing call
             callback_keywords = [
                 "बाद में कॉल", "बाद में फोन", "नंतर फोन", "नंतर कॉल", "नंतर बोला", "नंतर सांगा",
@@ -1152,8 +1264,19 @@ class SarvamTelephonyService:
             # 4. Generate next turn via Structured Dialogue Engine & Context Memory
             agent_speech_start = time.time()
             prev_agent_texts = [m["content"] for m in conversation_history if m.get("role") == "assistant"]
+            has_questionnaire_script = bool(
+                getattr(agent, "questionnaire_id", None)
+                and "MANDATORY QUESTIONNAIRE SCRIPT" in (system_prompt or "")
+            )
             is_agri_agent = (getattr(agent, "id", "") in ["agent-samruddhi-agritech", "agent-samruddhi-agri-hindi"]) or ("samruddhi" in (getattr(agent, "name", "")).lower()) or ("कृषि" in getattr(agent, "name", "")) or ("agri" in (getattr(agent, "name", "")).lower())
             is_sales_agent = (getattr(agent, "id", "") in ["agent-arb-sales-executive", "agent-arb-services-sales"]) or ("sales" in getattr(agent, "name", "").lower()) or ("solutions" in getattr(agent, "name", "").lower()) or ("executive" in getattr(agent, "name", "").lower())
+
+            # A configured questionnaire is the source of truth. Legacy
+            # vertical-specific flows contain stale scripts and must never
+            # override its questions, references, calculations, or language.
+            if has_questionnaire_script:
+                is_agri_agent = False
+                is_sales_agent = False
 
             direct_reply = None
             should_terminate_after_reply = False
@@ -1409,16 +1532,18 @@ class SarvamTelephonyService:
             else:
                 dynamic_system_prompt = system_prompt
                 ctx_parts = []
+                if context_state.get("customer_name"):
+                    ctx_parts.append(f"ग्राहक नाम: {context_state['customer_name']}" if "hi" in lang_code else f"ग्राहक नाव: {context_state['customer_name']}")
                 if context_state["crop"]:
-                    ctx_parts.append(f"पिक: {context_state['crop']}")
+                    ctx_parts.append(f"फसल: {context_state['crop']}" if "hi" in lang_code else f"पिक: {context_state['crop']}")
                 if context_state["timing"]:
-                    ctx_parts.append(f"खरेदी वेळ: {context_state['timing']}")
+                    ctx_parts.append(f"खरीद समय: {context_state['timing']}" if "hi" in lang_code else f"खरेदी वेळ: {context_state['timing']}")
                 if context_state["acreage"]:
                     ctx_parts.append(f"जमीन: {context_state['acreage']} (ALREADY KNOWN - DO NOT ASK FOR ACREAGE AGAIN)")
                 if context_state["quantity"]:
-                    ctx_parts.append(f"प्रमाण: {context_state['quantity']} (ALREADY KNOWN - DO NOT ASK FOR QUANTITY AGAIN)")
+                    ctx_parts.append(f"मात्रा: {context_state['quantity']} (ALREADY KNOWN - DO NOT ASK FOR QUANTITY AGAIN)" if "hi" in lang_code else f"प्रमाण: {context_state['quantity']} (ALREADY KNOWN - DO NOT ASK FOR QUANTITY AGAIN)")
                 if context_state["variety"]:
-                    ctx_parts.append(f"पसंतीची व्हरायटी: {context_state['variety']}")
+                    ctx_parts.append(f"पसंदीदा किस्म: {context_state['variety']}" if "hi" in lang_code else f"पसंतीची व्हरायटी: {context_state['variety']}")
 
                 if ctx_parts:
                     dynamic_system_prompt += f"\n\n[CURRENT SAVED CALL CONTEXT: {' | '.join(ctx_parts)}]"
@@ -1508,9 +1633,16 @@ class SarvamTelephonyService:
                     await session.commit()
             sequence_counter += 1
 
-            # Check if agent concluded call
-            if should_terminate_after_reply:
-                logger.info(f"[SarvamTelephony] Dialogue explicitly concluded (step={dialogue_step}). Hanging up carrier call.")
+            # Check if agent concluded call or delivered a farewell
+            is_agent_farewell = self.is_farewell_reply(full_reply)
+            if should_terminate_after_reply or is_agent_farewell:
+                logger.info(f"[SarvamTelephony] Dialogue concluded (should_terminate={should_terminate_after_reply}, is_farewell={is_agent_farewell}, step={dialogue_step}). Hanging up carrier call.")
+                if self.is_callback_request(user_text):
+                    async with AsyncSessionLocal() as session:
+                        c = await session.get(Call, call_id)
+                        if c:
+                            c.disposition = "callback_requested"
+                            await session.commit()
                 await asyncio.sleep(1.2)
                 try:
                     from app.services.telephony_service import telephony_service
@@ -1646,7 +1778,16 @@ class SarvamTelephonyService:
                         last_speech_time = now
                     elif is_user_speaking:
                         audio_buffer.extend(chunk)
-                        silence_threshold = 0.95 if len(audio_buffer) < 16000 else 0.80
+                        # Conversational pause threshold:
+                        # 1.10s for brief utterances (<1.5s audio), 1.35s for medium utterances, 1.25s for long.
+                        # This gives callers natural breathing room so multi-part answers (e.g. name + village + district)
+                        # are not prematurely fragmented or cut off mid-pause.
+                        if len(audio_buffer) < 12000:
+                            silence_threshold = 1.10
+                        elif len(audio_buffer) < 32000:
+                            silence_threshold = 1.35
+                        else:
+                            silence_threshold = 1.25
                         if now - last_speech_time > silence_threshold:
                             is_user_speaking = False
                             user_audio = bytes(audio_buffer)
@@ -1781,6 +1922,7 @@ class SarvamTelephonyService:
                     try:
                         from app.services.data_exporter import data_exporter
                         from app.services.lead_intelligence_service import lead_intelligence_service
+                        from app.services.questionnaire_export_analysis_service import analyze_and_store_call
 
                         if wav_bytes:
                             data_exporter.export_call_recording(call_id, wav_bytes)
@@ -1799,6 +1941,10 @@ class SarvamTelephonyService:
                         ]
 
                         intel = await lead_intelligence_service.analyze_call(session, call, segments=segs)
+                        # Cache each lead-question answer and call remark at
+                        # call completion. Excel export then reads this saved
+                        # analysis instead of depending on a new API call.
+                        await analyze_and_store_call(session, call, segments=segs)
 
                         # Automatic Follow-up Call Scheduling
                         try:

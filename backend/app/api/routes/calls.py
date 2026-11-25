@@ -1,16 +1,20 @@
 from app.models.lead import Lead
 import logging
+import io
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import RedirectResponse, Response, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.dependencies import resolve_tenant_id, verify_app_client
+from app.models.agent import Agent
 from app.models.call import Call, Recording, Transcript, TranscriptSegment
+from app.models.questionnaire import Questionnaire
 from app.schemas.call import (
     CallHistoryItem,
     CallHistoryResponse,
@@ -21,6 +25,7 @@ from app.schemas.call import (
 from app.services.call_service import CallServiceException, call_service, persist_post_call_artifacts, TERMINAL_STATES
 from app.services.dograh_service import DograhServiceException, dograh_service
 from app.services.lead_intelligence_service import lead_intelligence_service
+from app.services.questionnaire_export_analysis_service import analyze_and_store_call, analyze_transcript
 from app.services.redis_service import redis_service
 from app.services.storage.s3 import storage_service
 from app.services.telephony_service import telephony_service
@@ -110,6 +115,15 @@ def map_call_to_document(c: Call) -> Dict[str, Any]:
     }
 
 
+def _transcript_text(call: Call) -> str:
+    if not call.transcript or not call.transcript.segments:
+        return ""
+    return "\n".join(
+        f"{'Agent' if (segment.speaker or '').lower() in {'agent', 'assistant', 'bot'} else 'Customer'}: {segment.text}"
+        for segment in sorted(call.transcript.segments, key=lambda item: item.sequence or 0)
+    )
+
+
 @router.get("", response_model=List[Dict[str, Any]])
 async def list_calls(
     agent_id: Optional[str] = None,
@@ -161,6 +175,119 @@ async def list_calls(
     calls = res.scalars().all()
 
     return [map_call_to_document(c) for c in calls]
+
+
+@router.get("/export.xlsx")
+async def export_agent_calls_excel(
+    agent_id: str = Query(..., description="Agent whose questionnaire defines the export columns."),
+    call_ids: Optional[str] = Query(None, description="Optional comma-separated call IDs from the visible filtered table."),
+    tenant_id: Optional[str] = Depends(resolve_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export selected-agent calls with questionnaire fields and Gemini remarks."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+
+    agent = await db.get(Agent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Selected agent was not found.")
+    if tenant_id and agent.tenant_id and agent.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="Selected agent was not found for this business.")
+    if not agent.questionnaire_id:
+        raise HTTPException(status_code=400, detail="The selected agent has no questionnaire assigned.")
+
+    questionnaire = await db.get(Questionnaire, agent.questionnaire_id)
+    if not questionnaire:
+        raise HTTPException(status_code=400, detail="The selected agent questionnaire was not found.")
+
+    lead_questions: List[Dict[str, str]] = []
+    for index, item in enumerate(questionnaire.questions or []):
+        item_type = str(item.get("type") or "text").lower()
+        if item_type in {"reference", "follow_up", "closing"}:
+            continue
+        text = str(item.get("text") or "").strip()
+        if text:
+            lead_questions.append({
+                "id": str(item.get("question_id") or f"question_{index + 1}"),
+                "question": text,
+            })
+    if not lead_questions:
+        raise HTTPException(status_code=400, detail="The selected questionnaire has no lead-collection questions to export.")
+
+    stmt = (
+        select(Call)
+        .where(Call.agent_id == agent_id)
+        .options(selectinload(Call.transcript).selectinload(Transcript.segments))
+        .order_by(Call.created_at.desc())
+    )
+    if tenant_id:
+        stmt = stmt.where(Call.tenant_id == tenant_id)
+    requested_call_ids = [value.strip() for value in (call_ids or "").split(",") if value.strip()]
+    if requested_call_ids:
+        stmt = stmt.where(Call.id.in_(requested_call_ids))
+    result = await db.execute(stmt)
+    calls = result.scalars().all()
+
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "Lead Export"
+    headers = ["Phone Number", "Call Status", "Call Date"] + [item["question"] for item in lead_questions] + ["Remarks / Call Summary"]
+    worksheet.append(headers)
+    header_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+    for cell in worksheet[1]:
+        cell.fill = header_fill
+        cell.font = Font(color="FFFFFF", bold=True)
+
+    # Gemini requests are I/O-bound. A small concurrency limit keeps exports
+    # responsive for a page of calls without sending an uncontrolled burst.
+    semaphore = asyncio.Semaphore(4)
+
+    async def analyze_call(call: Call) -> Dict[str, Any]:
+        cached = (call.context_data or {}).get("questionnaire_export_analysis")
+        cached_questionnaire_id = (call.context_data or {}).get("questionnaire_export_questionnaire_id")
+        if (
+            isinstance(cached, dict)
+            and cached_questionnaire_id == questionnaire.id
+            and cached.get("status") == "completed"
+        ):
+            return cached
+        async with semaphore:
+            return await analyze_transcript(_transcript_text(call), lead_questions)
+
+    analyses = await asyncio.gather(*(analyze_call(call) for call in calls))
+    for call, analysis in zip(calls, analyses):
+        if analysis.get("status") == "completed":
+            context = dict(call.context_data or {})
+            context["questionnaire_export_analysis"] = analysis
+            context["questionnaire_export_questionnaire_id"] = questionnaire.id
+            call.context_data = context
+        answers = analysis["answers"]
+        worksheet.append([
+            call.phone_number,
+            call.status or "",
+            call.created_at.isoformat() if call.created_at else "",
+            *[answers.get(item["id"], "") for item in lead_questions],
+            analysis["remarks"],
+        ])
+
+    await db.commit()
+
+    for column in worksheet.columns:
+        letter = column[0].column_letter
+        longest = max(len(str(cell.value or "")) for cell in column)
+        worksheet.column_dimensions[letter].width = min(max(longest + 2, 16), 55)
+    worksheet.freeze_panes = "A2"
+    worksheet.auto_filter.ref = worksheet.dimensions
+
+    stream = io.BytesIO()
+    workbook.save(stream)
+    stream.seek(0)
+    filename = f"{agent.name.lower().replace(' ', '_')}_lead_export_{datetime.now(UTC).strftime('%Y%m%d')}.xlsx"
+    return StreamingResponse(
+        stream,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/initiate", response_model=InitiateCallResponse)

@@ -118,6 +118,38 @@ async def download_excel_template():
     ws.column_dimensions["A"].width = 65
     ws.column_dimensions["B"].width = 35
 
+    # Keep the original sheet for existing users and include a second sheet
+    # that demonstrates the optional multilingual import layout.
+    multi_ws = wb.create_sheet("Multilingual Questionnaire")
+    multilingual_headers = [
+        "Question ID", "Type",
+        "Question English", "Question Hinglish", "Question Hindi", "Question Marathi",
+        "Answer English", "Answer Hinglish", "Answer Hindi", "Answer Marathi",
+    ]
+    multi_ws.append(multilingual_headers)
+    for col_num in range(1, len(multilingual_headers) + 1):
+        cell = multi_ws.cell(row=1, column=col_num)
+        cell.fill = header_fill
+        cell.font = header_font
+    multilingual_rows = [
+        ["customer_name", "text", "May I know your name?", "Aapka name kya hai?", "Aapka naam kya hai?", "Tumche naav kaay aahe?", "Record customer name.", "Customer ka name record karein.", "Customer ka naam record karein.", "Customer che naav record kara."],
+        ["faq_hours", "reference", "What are your office hours?", "Aapke office timings kya hain?", "Aapke office ka samay kya hai?", "Office timings kaay aahet?", "Monday to Saturday, 9 AM to 6 PM.", "Monday se Saturday, 9 AM se 6 PM.", "Somvaar se Shanivaar, subah 9 se shaam 6 baje tak.", "Somvaar te Shanivaar, sakali 9 te sandhyakaali 6."],
+        ["follow_up", "follow_up", "Do you have any other question?", "Aapka koi aur question hai?", "Kya aapka koi aur sawaal hai?", "Tumhala ajun kahi vicharayche aahe ka?", "Approved FAQs only.", "Sirf approved FAQ answers.", "Sirf approved FAQ ka jawab.", "Fakta approved FAQ che uttar."],
+        ["closing", "closing", "Thank you. Our representative will contact you shortly.", "Thank you. Hamari team aapse jaldi contact karegi.", "Dhanyavaad. Hamari team aapse jaldi sampark karegi.", "Dhanyavaad. Aamchi team lavkarach tumchyashi sampark karel.", "Closing line.", "Closing line.", "Closing line.", "Closing line."],
+    ]
+    for row in multilingual_rows:
+        multi_ws.append(row)
+    for column in ("A", "B"):
+        multi_ws.column_dimensions[column].width = 18
+    for column in ("C", "D", "E", "F"):
+        multi_ws.column_dimensions[column].width = 42
+    for column in ("G", "H", "I", "J"):
+        multi_ws.column_dimensions[column].width = 45
+    multi_ws.freeze_panes = "A2"
+    # The importer reads the active worksheet, so make the multilingual
+    # layout the default sheet in the downloaded template.
+    wb.active = wb.index(multi_ws)
+
     stream = io.BytesIO()
     wb.save(stream)
     stream.seek(0)
@@ -178,7 +210,24 @@ async def import_excel_questionnaire(
     question_col_idx = 0
     expected_ans_col_idx = 1
 
+    # Legacy workbooks use Question / Expected Answer.  A multilingual
+    # workbook may additionally provide Question/Answer English, Hinglish,
+    # Hindi and Marathi, together with optional Question ID and Type columns.
     first_row = [str(c or "").strip().lower() for c in rows[0]]
+    header_map = {value: idx for idx, value in enumerate(first_row) if value}
+    language_columns: Dict[str, Dict[str, Optional[int]]] = {
+        language: {
+            "question": header_map.get(f"question {language}"),
+            "answer": header_map.get(f"answer {language}"),
+        }
+        for language in ("english", "hinglish", "hindi", "marathi")
+    }
+    has_multilingual_columns = any(
+        indexes["question"] is not None or indexes["answer"] is not None
+        for indexes in language_columns.values()
+    )
+    question_id_col_idx = header_map.get("question id")
+    type_col_idx = header_map.get("type")
     has_header = False
 
     for idx, col_val in enumerate(first_row):
@@ -207,6 +256,23 @@ async def import_excel_questionnaire(
         if len(row) > expected_ans_col_idx and row[expected_ans_col_idx] is not None:
             exp_ans = str(row[expected_ans_col_idx]).strip()
 
+        translations: Dict[str, str] = {}
+        answer_translations: Dict[str, str] = {}
+        if has_multilingual_columns:
+            for language, indexes in language_columns.items():
+                question_index = indexes["question"]
+                answer_index = indexes["answer"]
+                if question_index is not None and len(row) > question_index and row[question_index] is not None:
+                    value = str(row[question_index]).strip()
+                    if value:
+                        translations[language] = value
+                if answer_index is not None and len(row) > answer_index and row[answer_index] is not None:
+                    value = str(row[answer_index]).strip()
+                    if value:
+                        answer_translations[language] = value
+            q_text = translations.get("english") or next(iter(translations.values()), q_text)
+            exp_ans = answer_translations.get("english") or next(iter(answer_translations.values()), exp_ans)
+
         if not q_text:
             warnings.append(f"Row {row_num}: Skipped because Question text is empty.")
             continue
@@ -216,15 +282,30 @@ async def import_excel_questionnaire(
             exp_ans = "Any Answer"
 
         q_id = f"q_{uuid.uuid4().hex[:8]}"
-        parsed_questions.append({
+        if question_id_col_idx is not None and len(row) > question_id_col_idx and row[question_id_col_idx] is not None:
+            q_id = str(row[question_id_col_idx]).strip() or q_id
+        item_type = "text"
+        if type_col_idx is not None and len(row) > type_col_idx and row[type_col_idx] is not None:
+            candidate_type = str(row[type_col_idx]).strip().lower()
+            if candidate_type in {"text", "number", "yes_no", "single_choice", "reference", "follow_up", "closing"}:
+                item_type = candidate_type
+            elif candidate_type:
+                warnings.append(f"Row {row_num}: Unsupported Type '{candidate_type}', imported as text.")
+
+        item = {
             "question_id": q_id,
             "text": q_text,
             "expected_answer": exp_ans,
-            "type": "text",
+            "type": item_type,
             "required": True,
             "options": [],
             "conditional_rules": [],
-        })
+        }
+        if translations:
+            item["translations"] = translations
+        if answer_translations:
+            item["answer_translations"] = answer_translations
+        parsed_questions.append(item)
 
     if not parsed_questions:
         raise HTTPException(
@@ -303,7 +384,11 @@ async def sync_questionnaire_to_agent(db: AsyncSession, agent_id: str, q: Questi
     import re
     if q.questions:
         q_block = format_questionnaire_prompt_block(q.title, q.questions)
-        cleaned_instr = re.sub(r"\n\n### MANDATORY QUESTIONNAIRE SCRIPT[\s\S]*?(?=\n\n[A-Z#]|$)", "", agent.instructions or "").strip()
+        cleaned_instr = re.sub(
+            r"\n\n### MANDATORY QUESTIONNAIRE SCRIPT[\s\S]*?(?:\n### END MANDATORY QUESTIONNAIRE SCRIPT|(?=\n\n[A-Z#]|\Z))",
+            "",
+            agent.instructions or "",
+        ).strip()
         agent.instructions = f"{cleaned_instr}\n\n{q_block}" if cleaned_instr else q_block
         agent.system_prompt = agent.instructions
 

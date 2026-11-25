@@ -2,6 +2,23 @@ import apiClient, { API_BASE_URL } from './client';
 import { CallDocument, TranscriptDocument, InterestAnalysisDocument } from '../../types/api';
 
 export const callsApi = {
+  downloadAgentLeadExport: async (agentId: string, callIds: string[]): Promise<void> => {
+    const res = await apiClient.get('/calls/export.xlsx', {
+      params: { agent_id: agentId, call_ids: callIds.join(',') || undefined },
+      responseType: 'blob',
+    });
+    const url = window.URL.createObjectURL(new Blob([res.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'agent_lead_export.xlsx';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
+
   getCalls: async (params?: {
     agent_id?: string;
     campaign_id?: string;

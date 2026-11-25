@@ -9,9 +9,9 @@
 ![License](https://img.shields.io/badge/License-Proprietary-red?style=for-the-badge)
 
 **Autonomous Conversational Telephony Agent for Real-Time PSTN Phone Calls**  
-*Fluent Hindi (Devanagari), English & Indic Dialects • Sub-400ms Barge-In Interruption • Lead Intelligence Qualification*
+*Fluent Hindi (Devanagari), Marathi, English & Indic Dialects • Sub-200ms Hybrid FSM Engine • Lead Intelligence Qualification*
 
-[⚡ 1-Click Quickstart](#-1-click-universal-quickstart) • [📁 Data Storage Guide](#-clean-data-storage-architecture) • [📞 Telephony Setup](#-telephony-carrier-setup-vobiz--twilio) • [🩺 System Doctor](#-preflight-system-doctor) • [🛠️ Troubleshooting](#%EF%B8%8F-troubleshooting)
+[🎓 Viva & Exam Defense Guide](docs/VIVA_PREPARATION_AND_ARCHITECTURE_GUIDE.md) • [📚 Full Docs Index](docs/README.md) • [⚡ 1-Click Quickstart](#-1-click-universal-quickstart) • [📁 Directory Structure](#-clean-project-structure) • [📞 Telephony Setup](#-telephony-carrier-setup-vobiz--twilio)
 
 </div>
 
@@ -73,18 +73,32 @@ chmod +x setup_and_run.sh
 
 ---
 
-## 📁 Clean Data Storage Architecture
+## 📁 Clean Project Structure
 
-All persistent call artifacts are organized neatly into a single root-level `data/` folder:
+The project has been organized into clear, professional directories:
 
 ```
-calling-agent-platform/
-├── data/
-│   ├── recordings/       <-- Authentic 2-way WAV audio recordings (call_<id>.wav)
-│   ├── transcripts/      <-- Human-readable (.txt) & structured (.json) dialogue logs
-│   ├── intelligence/     <-- Google Gemini lead qualification & interest scoring
-│   ├── database/         <-- SQLite database (calling_agent.db)
-│   └── logs/             <-- Backend server and Ngrok tunnel runtime logs
+Calling-Agent-SAAS-/
+├── backend/            <-- FastAPI Application, Telephony WebSockets, Database & Models
+├── frontend_1/         <-- React 18, TypeScript, TailwindCSS Dashboard UI
+├── docs/               <-- Comprehensive Documentation & Viva Master Defense Guide
+│   ├── VIVA_PREPARATION_AND_ARCHITECTURE_GUIDE.md  <-- Master viva preparation guide
+│   ├── AGENT_CREATION_GUIDE.md                     <-- AI Agent configuration manual
+│   ├── CLIENT_HANDOVER.md                          <-- Client deployment runbook
+│   ├── TRANSCRIPT_ANALYZER_GUIDE.md                <-- Call classifier documentation
+│   └── UI_AUDIT.md                                 <-- Frontend UI tokens & architecture
+├── data/               <-- Persistent Call Data
+│   ├── recordings/     <-- Authentic 2-way WAV audio recordings (call_<id>.wav)
+│   ├── transcripts/    <-- Human-readable (.txt) & structured (.json) dialogue logs
+│   ├── intelligence/   <-- Lead qualification & interest scoring
+│   ├── database/       <-- SQLite database (calling_agent.db)
+│   └── logs/           <-- Backend server and Ngrok tunnel runtime logs
+├── exports/            <-- Lead & CDR Excel spreadsheets (.xlsx)
+├── model/              <-- Machine Learning Transcript Intelligence Classifier
+├── scripts/            <-- Launcher helpers, diagnostic doctor, packaging tools
+├── start_all.bat       <-- 1-Click launcher (Ngrok + Backend + Frontend)
+├── setup_and_run.bat   <-- First-time automated installer
+└── docker-compose.yml  <-- Optional containerized orchestrator
 ```
 
 ### 1. Audio Recordings (`data/recordings/`)

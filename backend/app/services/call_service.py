@@ -21,6 +21,7 @@ from app.models.telephony import TelephonyConfig
 from app.schemas.call import DograhWebhookPayload, InitiateCallRequest
 from app.services.dograh_service import DograhServiceException, dograh_service
 from app.services.lead_intelligence_service import lead_intelligence_service
+from app.services.questionnaire_export_analysis_service import analyze_and_store_call
 from app.services.redis_service import redis_service
 from app.services.storage.s3 import storage_service
 from app.utils.datetime_utils import ensure_utc, to_iso_utc
@@ -399,6 +400,9 @@ async def persist_post_call_artifacts(session: AsyncSession, call: Call, payload
         # -------------------------------------------------------------
         try:
             intel = await lead_intelligence_service.analyze_call(session, call)
+            # Save questionnaire-specific answers and the call summary for
+            # every completed call. The Excel export reads this cached result.
+            await analyze_and_store_call(session, call)
             disp = (call.disposition or "").lower()
             if disp == "interested":
                 lead_stmt = select(Lead).where(Lead.call_id == call.id)

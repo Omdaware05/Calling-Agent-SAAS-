@@ -9,13 +9,14 @@ import { CallDetailDrawer } from './CallDetailDrawer';
 import { callsApi } from '../../services/api/calls';
 import { agentsApi } from '../../services/api/agents';
 import { useBusiness } from '../../app/providers/BusinessProvider';
+import { useToast } from '../../app/providers/ToastProvider';
 import { CallDocument } from '../../types/api';
 import { PhoneCall, Eye, RefreshCw, Filter } from 'lucide-react';
-import { format } from 'date-fns';
 import { useSearchParams } from 'react-router-dom';
 import { TimeFilterAndExport } from '../../components/ui/TimeFilterAndExport';
-import { exportToExcel, filterByDateRange, TimeFilterRange } from '../../utils/excelExport';
+import { filterByDateRange, TimeFilterRange } from '../../utils/excelExport';
 import { formatDateTime } from '../../utils/dateUtils';
+import { getErrorMessage } from '../../services/api/client';
 
 export const CallsPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -26,6 +27,8 @@ export const CallsPage: React.FC = () => {
   const [stateFilter, setStateFilter] = useState<string>('ALL');
   const [agentFilter, setAgentFilter] = useState<string>(urlAgentId);
   const [timeRange, setTimeRange] = useState<TimeFilterRange>('all');
+  const [isExporting, setIsExporting] = useState(false);
+  const toast = useToast();
 
   React.useEffect(() => {
     if (urlAgentId) {
@@ -44,7 +47,7 @@ export const CallsPage: React.FC = () => {
     return agents.filter((a) => selectedBusiness.assignedAgentIds.includes(a.agent_id));
   }, [agents, selectedBusiness, isAllBusinesses]);
 
-  const { data: calls = [], isLoading, refetch } = useQuery({
+  const { data: calls = [], isLoading, isError: callsLoadFailed, refetch } = useQuery({
     queryKey: ['calls', stateFilter, agentFilter, selectedBusinessId],
     queryFn: () =>
       callsApi.getCalls({
@@ -73,18 +76,24 @@ export const CallsPage: React.FC = () => {
     return filterByDateRange(result, (c) => c.created_at, timeRange);
   }, [calls, scopedAgents, selectedBusiness, isAllBusinesses, agentFilter, timeRange]);
 
-  const handleExportExcel = () => {
-    const exportRows = displayCalls.map((c) => ({
-      'Call ID': c.call_id,
-      'Phone Number': c.phone_number,
-      'State': c.state,
-      'Provider': c.provider || 'vobiz',
-      'Duration (sec)': c.duration ?? 0,
-      'Agent ID': c.agent_id || 'N/A',
-      'Created At': formatDateTime(c.created_at, 'yyyy-MM-dd HH:mm:ss'),
-      'Recording': c.recording?.provider_url || c.recording?.local_path || 'N/A',
-    }));
-    exportToExcel(exportRows, `voxora_call_history_${timeRange}_${format(new Date(), 'yyyyMMdd')}`, 'Call History');
+  const handleExportExcel = async () => {
+    if (!agentFilter) {
+      toast.error('Select one agent', 'Choose an agent first so the export can use its lead questionnaire columns.');
+      return;
+    }
+    if (displayCalls.length === 0) {
+      toast.warning('No calls to export');
+      return;
+    }
+    setIsExporting(true);
+    try {
+      await callsApi.downloadAgentLeadExport(agentFilter, displayCalls.map((call) => call.call_id));
+      toast.success('Lead export downloaded', 'Questionnaire answers and Gemini call remarks were included.');
+    } catch (error) {
+      toast.error('Export failed', getErrorMessage(error));
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const columns: Column<CallDocument>[] = [
@@ -178,8 +187,9 @@ export const CallsPage: React.FC = () => {
               timeRange={timeRange}
               onTimeRangeChange={setTimeRange}
               onExport={handleExportExcel}
+              isExporting={isExporting}
               filteredCount={displayCalls.length}
-              label="Export Calls"
+              label="Export Lead Excel"
             />
             <Button
               variant="secondary"
@@ -232,13 +242,15 @@ export const CallsPage: React.FC = () => {
       <DataTable
         columns={columns}
         data={displayCalls}
-        isLoading={isLoading}
+        isLoading={isLoading && !callsLoadFailed}
         keyExtractor={(call) => call.call_id}
         onRowClick={(call) => setSelectedCallId(call.call_id)}
         searchPlaceholder="Filter by phone number..."
         searchableKey="phone_number"
-        emptyTitle="No calls recorded"
-        emptyDescription="No voice sessions recorded under the selected filter criteria."
+        emptyTitle={callsLoadFailed ? 'Calls could not be loaded' : 'No calls recorded'}
+        emptyDescription={callsLoadFailed
+          ? 'The backend is unavailable or returned an error. Restart the backend, then click Refresh.'
+          : 'No voice sessions recorded under the selected filter criteria.'}
         pageSize={12}
       />
 

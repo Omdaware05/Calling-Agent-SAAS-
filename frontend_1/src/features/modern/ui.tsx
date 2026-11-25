@@ -15,8 +15,7 @@ export const MCard: React.FC<{ className?: string; children: React.ReactNode }> 
 }) => (
   <div
     className={clsx(
-      'bg-white dark:bg-[#12141a]/90 dark:backdrop-blur-xl border border-[#E8EAED] dark:border-white/[0.08] rounded-[24px]',
-      'shadow-[0_1px_2px_rgba(16,24,40,0.05),0_16px_40px_-28px_rgba(16,24,40,0.22)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)]',
+      'bg-white border border-slate-200/90 rounded-xl shadow-xs',
       className
     )}
   >
@@ -25,9 +24,7 @@ export const MCard: React.FC<{ className?: string; children: React.ReactNode }> 
 );
 
 /**
- * Stat card in the "design #2" language: icon-in-circle + label header
- * row, one large value, and a delta pill with a comparison caption.
- * Used for every KPI/stat strip across the Modern experience.
+ * Stat card matching the enterprise operational telemetry theme.
  */
 export const MStatCard: React.FC<{
   label: string;
@@ -38,33 +35,35 @@ export const MStatCard: React.FC<{
   deltaCaption?: string;
   subtext?: string;
   delay?: number;
-}> = ({ label, value, icon: Icon, iconClass = 'bg-[#F2F4F7] dark:bg-white/[0.06] text-[#344054] dark:text-neutral-300', deltaPct, deltaCaption = 'vs previous 7 days', subtext, delay = 0 }) => (
-  <MCard className="p-[22px]">
+}> = ({ label, value, icon: Icon, iconClass = 'bg-slate-50 text-slate-700 border border-slate-200', deltaPct, deltaCaption = 'vs previous 7 days', subtext, delay = 0 }) => (
+  <MCard className="p-4 sm:p-5">
     <div className="anim-enter" style={{ animationDelay: `${delay}ms` }}>
-      <div className="flex items-center gap-3">
-        <span className={clsx('w-11 h-11 rounded-full flex items-center justify-center shrink-0', iconClass)}>
-          <Icon className="w-5 h-5" strokeWidth={1.9} />
-        </span>
-        <p className="text-[15px] font-semibold text-[#101828] dark:text-white flex-1 leading-snug">{label}</p>
-        <Info className="w-[18px] h-[18px] text-[#C4CBD4] dark:text-neutral-500 shrink-0" />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className={clsx('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', iconClass)}>
+            <Icon className="w-4 h-4" strokeWidth={2} />
+          </span>
+          <p className="font-label-sm uppercase tracking-wider text-slate-500 text-[11px] font-semibold">{label}</p>
+        </div>
+        <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" />
       </div>
-      <p className="text-[34px] leading-none font-extrabold tracking-tight text-[#101828] dark:text-white mt-4 tabular-nums">{value}</p>
-      <div className="flex items-center gap-2 mt-3.5 min-h-[22px]">
+      <p className="font-headline-md text-slate-900 text-2xl font-bold tracking-tight mt-3 tabular-nums">{value}</p>
+      <div className="flex items-center gap-2 mt-2 min-h-[20px]">
         {deltaPct !== undefined && deltaPct !== null && isFinite(deltaPct) ? (
           <>
             <span
               className={clsx(
-                'inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-bold',
-                deltaPct >= 0 ? 'bg-[#E7F8EE] dark:bg-emerald-500/15 text-[#16A34A] dark:text-emerald-400' : 'bg-[#FDECEC] dark:bg-rose-500/15 text-[#DC2626] dark:text-rose-400'
+                'inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[11px] font-mono-sm font-medium',
+                deltaPct >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
               )}
             >
               {deltaPct >= 0 ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
               {Math.abs(deltaPct).toFixed(0)}%
             </span>
-            <span className="text-[13px] text-[#667085] dark:text-neutral-400">{deltaCaption}</span>
+            <span className="text-xs text-slate-500">{deltaCaption}</span>
           </>
         ) : (
-          <span className="text-[13px] text-[#667085] dark:text-neutral-400">{subtext || ''}</span>
+          <span className="text-xs text-slate-500">{subtext || ''}</span>
         )}
       </div>
     </div>
@@ -76,19 +75,19 @@ export const MPageHeader: React.FC<{
   subtitle?: string;
   actions?: React.ReactNode;
 }> = ({ title, subtitle, actions }) => (
-  <div className="flex flex-wrap items-end justify-between gap-4 mb-6 anim-enter">
+  <div className="flex flex-wrap items-end justify-between gap-4 mb-5 anim-enter">
     <div>
-      <h1 className="text-[26px] leading-tight font-bold tracking-tight text-[#101828] dark:text-white">{title}</h1>
-      {subtitle && <p className="text-sm text-[#667085] dark:text-neutral-400 mt-1">{subtitle}</p>}
+      <h1 className="font-headline-md text-xl sm:text-2xl font-bold tracking-tight text-slate-900">{title}</h1>
+      {subtitle && <p className="font-body-sm text-xs sm:text-sm text-slate-500 mt-0.5">{subtitle}</p>}
     </div>
-    {actions && <div className="flex items-center gap-2.5 flex-wrap">{actions}</div>}
+    {actions && <div className="flex items-center gap-2 flex-wrap">{actions}</div>}
   </div>
 );
 
 export const primaryPill =
-  'inline-flex items-center gap-2 h-10 px-5 rounded-full bg-[#101828] text-white text-[13px] font-semibold shadow-[0_1px_2px_rgba(16,24,40,0.25)] hover:bg-[#1D2939] transition-all active:scale-[0.98]';
+  'inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 text-white rounded-md font-label-md text-xs hover:bg-slate-800 transition-all font-medium shadow-xs';
 export const whitePill =
-  'inline-flex items-center gap-2 h-10 px-5 rounded-full bg-white dark:bg-white/[0.06] border border-[#E4E7EC] dark:border-white/[0.1] text-[#344054] dark:text-white text-[13px] font-semibold shadow-[0_1px_2px_rgba(16,24,40,0.05)] hover:bg-[#F9FAFB] dark:hover:bg-white/[0.1] transition-all active:scale-[0.98]';
+  'inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-md font-label-md text-xs transition-colors font-medium shadow-xs';
 
 const AVATAR_BG = [
   'bg-orange-100 text-orange-700',

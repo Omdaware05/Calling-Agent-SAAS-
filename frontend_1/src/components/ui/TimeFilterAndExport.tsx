@@ -7,6 +7,7 @@ export interface TimeFilterAndExportProps {
   timeRange: TimeFilterRange;
   onTimeRangeChange: (range: TimeFilterRange) => void;
   onExport: () => void;
+  isExporting?: boolean;
   filteredCount?: number;
   label?: string;
 }
@@ -15,6 +16,7 @@ export const TimeFilterAndExport: React.FC<TimeFilterAndExportProps> = ({
   timeRange,
   onTimeRangeChange,
   onExport,
+  isExporting = false,
   filteredCount,
   label = 'Export Excel',
 }) => {
@@ -53,6 +55,7 @@ export const TimeFilterAndExport: React.FC<TimeFilterAndExportProps> = ({
         variant="outline"
         size="sm"
         onClick={onExport}
+        isLoading={isExporting}
         className="border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-semibold"
         leftIcon={<FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
       >

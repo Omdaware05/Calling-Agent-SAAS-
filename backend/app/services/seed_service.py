@@ -11,6 +11,7 @@ from sqlalchemy import select
 from app.database import AsyncSessionLocal
 from app.models.tenant import Tenant
 from app.models.agent import Agent
+from app.models.questionnaire import Questionnaire
 from app.models.telephony import TelephonyConfig
 from app.config import settings
 
@@ -189,6 +190,61 @@ async def seed_initial_data_if_needed():
 
                 for ag in agents_to_seed:
                     session.add(ag)
+
+                # This is the supplied ARB lead-generation questionnaire.
+                # Its wording is kept verbatim: the runtime will ask only
+                # these items, collect the answers, then hand the lead to a
+                # human ARB Sales & Solutions representative.
+                sales_agent = next(a for a in agents_to_seed if a.id == "agent-arb-sales-executive")
+                sales_questions = [
+                    {
+                        "question_id": "arb_interest",
+                        "text": "Hello, I am calling from ARB SoftTech. We help businesses grow with AI-powered voice calling and lead generation solutions. Are you interested in knowing more?",
+                        "expected_answer": "YES / NO question. If the customer says NO, thank them politely and end the call. If the customer says YES, qualify them as INTERESTED and ask for their name.",
+                        "type": "yes_no",
+                    },
+                    {
+                        "question_id": "arb_name",
+                        "text": "May I know your name, please?",
+                        "expected_answer": "Customer's name. Acknowledge it warmly and use it in the closing.",
+                        "type": "text",
+                    },
+                    {
+                        "question_id": "arb_service",
+                        "text": "Which service are you interested in: 1. AI Outbound Calling Agent, 2. Customer Support Automation, or 3. Lead Qualification System?",
+                        "expected_answer": "Record the service they select (1, 2 or 3).",
+                        "type": "single_choice",
+                    },
+                    {
+                        "question_id": "arb_pricing_interest",
+                        "text": "Our plans start at ₹4,999 per month, with unlimited smart calling and real-time lead intelligence. Shall I note you as interested?",
+                        "expected_answer": "Explain the pricing exactly as written. If the customer says OK, proceed to the closing.",
+                        "type": "yes_no",
+                    },
+                    {
+                        "question_id": "arb_closing",
+                        "text": "Thank you. It was great speaking with you. Our team will call you back shortly with the next steps. Have a great day!",
+                        "expected_answer": "Closing line. Thank the customer by name and end the call gracefully.",
+                        "type": "closing",
+                    },
+                ]
+                questionnaire = Questionnaire(
+                    id="q-arb-sales-lead-generation",
+                    tenant_id=tenant.id,
+                    agent_id=sales_agent.id,
+                    title="ARB SoftTech Sales Lead Generation",
+                    description="Lead-generation flow imported from ARB_SoftTech_Sales_Lead_Generation_Questionnaire.xlsx",
+                    questions=sales_questions,
+                    status="published",
+                    is_published=True,
+                    version_id="v1",
+                )
+                from app.services.agent_service import format_questionnaire_prompt_block
+                sales_agent.greeting_message = sales_questions[0]["text"]
+                sales_agent.questionnaire_id = questionnaire.id
+                sales_agent.instructions = format_questionnaire_prompt_block(questionnaire.title, sales_questions)
+                sales_agent.system_prompt = sales_agent.instructions
+                session.add(questionnaire)
 
                 logger.info(f"[Seeder] Seeded {len(agents_to_seed)} pre-configured voice calling agents.")
 

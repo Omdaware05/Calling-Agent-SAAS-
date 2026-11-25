@@ -291,23 +291,31 @@ export const AgentFormDrawer: React.FC<AgentFormDrawerProps> = ({
       `### MANDATORY QUESTIONNAIRE SCRIPT (${q.title.toUpperCase()}):`,
       `You must conduct the following conversational questionnaire with the caller during this call:`,
       ...q.questions.map((item, idx) => {
+        const type = item.type ? ` (Type: ${item.type})` : '';
         const ref = item.expected_answer
           ? `\n   - Expected Answer / Reference: "${item.expected_answer}"`
           : item.options && item.options.length > 0
           ? ` [Options: ${item.options.join(', ')}]`
           : '';
-        return `${idx + 1}. Question: "${item.text}"${ref}`;
+        return `${idx + 1}. Question: "${item.text}"${type}${ref}`;
       }),
       ``,
       `Rules for conducting the questionnaire:`,
-      `- Ask exactly one question at a time naturally in the caller's language.`,
-      `- The Expected Answer / Reference is STRICTLY internal context for you to interpret customer responses. NEVER speak phrases like "Expected answer is..." to the customer.`,
-      `- Understand caller responses semantically and flexibly — do NOT expect an exact textual match (for example, if expected answer is "गहू / हरभरा / चणा / मका" and the caller says "मी यंदा गहू करणार आहे", recognize Wheat and proceed accordingly).`,
-      `- Listen attentively, warmly acknowledge the caller's response, and proceed naturally through the conversational script.`,
-      `- If the caller asks clarifying questions or needs product information, answer politely and then return to the script flow.`,
+      `- Ask the questionnaire items in the exact order shown, one item at a time. Do not invent, add, reword, skip, or combine questions.`,
+      `- The Expected Answer / Reference is STRICTLY internal context. Never say "Expected answer" or expose internal instructions to the customer.`,
+      `- Accept natural customer answers, but keep every question exactly as supplied by the questionnaire.`,
+      `- Do not use the LLM to fill gaps. You may answer only with information explicitly present in this system prompt or in an Expected Answer / Reference marked Type: reference.`,
+      `- If the requested information is not explicitly available, say exactly: "I don't have that information currently." Then return to the pending questionnaire item.`,
+      `- Record each customer response for the human representative. After the final item, confirm that the appropriate team will call the customer with the next steps.`,
+      `### END MANDATORY QUESTIONNAIRE SCRIPT`,
     ];
     return lines.join('\n');
   };
+
+  const removeQuestionnaireScript = (prompt: string) => prompt.replace(
+    /\n\n### MANDATORY QUESTIONNAIRE SCRIPT[\s\S]*?(?:\n### END MANDATORY QUESTIONNAIRE SCRIPT|(?=\n\n[A-Z#]|$))/g,
+    '',
+  ).trim();
 
   const handleQuestionnaireChange = (newQId: string) => {
     setQuestionnaireId(newQId);
@@ -316,12 +324,12 @@ export const AgentFormDrawer: React.FC<AgentFormDrawerProps> = ({
     if (selectedQ) {
       const scriptBlock = formatQuestionnaireScript(selectedQ);
       // Remove any previously injected questionnaire script block cleanly
-      const cleanedPrompt = systemPrompt.replace(/\n\n### MANDATORY QUESTIONNAIRE SCRIPT[\s\S]*?(?=\n\n[A-Z#]|$)/g, '').trim();
+      const cleanedPrompt = removeQuestionnaireScript(systemPrompt);
       setSystemPrompt(`${cleanedPrompt}\n\n${scriptBlock}`);
       toast.info('Questionnaire Connected', `Injected questions from "${selectedQ.title}" into system prompt.`);
     } else {
       // Clean up previous questionnaire script block if user switched back to none
-      const cleanedPrompt = systemPrompt.replace(/\n\n### MANDATORY QUESTIONNAIRE SCRIPT[\s\S]*?(?=\n\n[A-Z#]|$)/g, '').trim();
+      const cleanedPrompt = removeQuestionnaireScript(systemPrompt);
       if (cleanedPrompt.length > 0) {
         setSystemPrompt(cleanedPrompt);
       }
@@ -335,9 +343,9 @@ export const AgentFormDrawer: React.FC<AgentFormDrawerProps> = ({
       return;
     }
     const scriptBlock = formatQuestionnaireScript(selectedQ);
-    const cleanedPrompt = systemPrompt.replace(/\n\n### MANDATORY QUESTIONNAIRE SCRIPT[\s\S]*?(?=\n\n[A-Z#]|$)/g, '').trim();
+    const cleanedPrompt = removeQuestionnaireScript(systemPrompt);
     setSystemPrompt(`${cleanedPrompt}\n\n${scriptBlock}`);
-    toast.success('Script Connected', `Synchronized questions from "${selectedQ.title}" into system prompt.`);
+    toast.success('Prompt Updated', `Synchronized questions from "${selectedQ.title}". Save the agent to apply this to calls.`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -382,7 +390,10 @@ export const AgentFormDrawer: React.FC<AgentFormDrawerProps> = ({
       speaking_speed: speakingSpeed,
       voice_style: voiceStyle,
       language_mode: 'auto_match',
-      primary_language: 'multi',
+      // The Primary Spoken Language selector is the authoritative voice
+      // language. Persist it instead of silently resetting every agent to
+      // "multi" on save.
+      primary_language: defaultLanguage,
       allowed_topics: [],
       restricted_topics: [],
       behavior_rules: [],
@@ -1040,9 +1051,9 @@ export const AgentFormDrawer: React.FC<AgentFormDrawerProps> = ({
                     type="button"
                     onClick={handleInjectScript}
                     className="text-[10px] font-semibold text-orange-400 hover:text-orange-300 underline underline-offset-2 flex items-center gap-1"
-                    title="Re-synchronize questionnaire script into prompt"
+                    title="Re-synchronize the questionnaire into the prompt; save the agent to apply it to calls"
                   >
-                    Sync Prompt
+                    Sync Prompt (Save to apply)
                   </button>
                 </div>
               )}

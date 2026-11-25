@@ -17,6 +17,8 @@ import zipfile
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent
+if ROOT_DIR.name == "scripts":
+    ROOT_DIR = ROOT_DIR.parent
 OUTPUT_ZIP = ROOT_DIR / "arb_calling_agent_client_package.zip"
 
 EXCLUDE_DIRS = {
